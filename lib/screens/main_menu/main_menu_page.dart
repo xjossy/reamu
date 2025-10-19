@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/menu_tile.dart';
 import '../absolute_pitch/absolute_pitch_page.dart';
 import '../simple_playing/simple_playing_page.dart';
+import '../synesthetic_pitch/describing_page.dart';
 
 class MainMenuPage extends StatelessWidget {
   const MainMenuPage({super.key});
@@ -55,6 +56,21 @@ class MainMenuPage extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const SimplePlayingPage(),
+                  ),
+                );
+              },
+            ),
+            
+            // Synesthetic Pitch - Describing Tile
+            MenuTile(
+              title: 'Synesthetic Pitch',
+              icon: Icons.psychology,
+              color: Colors.teal,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DescribingPage(),
                   ),
                 );
               },

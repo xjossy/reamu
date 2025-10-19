@@ -1,0 +1,13 @@
+questions:
+  - key: 'color'
+    question: "What color best evokes this note?"
+    options: ["Red", "Green", "Blue", "Yellow", "Purple", "Orange"]
+  - key: 'size'
+    question: "How would you describe the 'size' of this note?"
+    options: ["Tiny", "Small", "Medium", "Large", "Huge"]
+  - key: 'texture'
+    question: "What texture or feeling does this note suggest?"
+    options: ["Smooth", "Rough", "Warm", "Cool", "Sharp", "Soft"]
+  - key: 'shape'
+    question: "Which shape comes to mind for this note?"
+    options: ["Circle", "Square", "Triangle", "Star", "Wavy Line"]
