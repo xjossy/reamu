@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
@@ -6,23 +7,25 @@ import '../../services/midi_service.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/settings_service.dart';
 import '../../models/note.dart';
-import 'statistics_page.dart';
+import '../../utils/weighted_random.dart';
+import 'guess_note_selection_page.dart';
 
-class DescribingPage extends StatefulWidget {
-  final String? selectedNote;
+class GuessingPage extends StatefulWidget {
+  final int questionCount;
   
-  const DescribingPage({super.key, this.selectedNote});
+  const GuessingPage({super.key, required this.questionCount});
 
   @override
-  State<DescribingPage> createState() => _DescribingPageState();
+  State<GuessingPage> createState() => _GuessingPageState();
 }
 
-class _DescribingPageState extends State<DescribingPage> {
+class _GuessingPageState extends State<GuessingPage> {
   final MidiService _midiService = MidiService();
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   final SettingsService _settingsService = SettingsService.instance;
   bool _isLoaded = false;
-  List<DescribingQuestion> _questions = [];
+  List<DescribingQuestion> _allQuestions = [];
+  List<DescribingQuestion> _selectedQuestions = [];
   int _currentQuestionIndex = 0;
   String? _selectedOption;
   Map<String, String> _answers = {};
@@ -40,12 +43,11 @@ class _DescribingPageState extends State<DescribingPage> {
     await _initializeMidi();
     await _loadUserProgress();
     await _loadQuestions();
-    await _setupCurrentNote();
+    await _setupRandomNote();
   }
 
   void _autoPlayNote() {
-    // Auto-play note when everything is ready
-    if (_isLoaded && _questions.isNotEmpty) {
+    if (_isLoaded && _selectedQuestions.isNotEmpty) {
       Future.delayed(const Duration(milliseconds: 500), () {
         _replayNote();
       });
@@ -53,7 +55,7 @@ class _DescribingPageState extends State<DescribingPage> {
   }
 
   @override
-  void didUpdateWidget(DescribingPage oldWidget) {
+  void didUpdateWidget(GuessingPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     _autoPlayNote();
   }
@@ -63,34 +65,16 @@ class _DescribingPageState extends State<DescribingPage> {
     setState(() {
       _isLoaded = success;
     });
+    if (success) {
+      _autoPlayNote();
+    }
   }
 
   Future<void> _loadUserProgress() async {
-    _userProgress = await _memoryService.getUserProgress();
-  }
-
-  Future<void> _setupCurrentNote() async {
-    if (widget.selectedNote != null) {
-      // Use the selected note from Learn mode
-      _currentNoteName = widget.selectedNote;
-    } else {
-      // Use the next note in sequence
-      _currentNoteName = await _settingsService.getCurrentNote(_userProgress);
-    }
-    
-    if (_currentNoteName != null) {
-      // Convert note name to MIDI number
-      final note = Note.fromName(_currentNoteName!);
-      _currentNoteMidi = note.midiNumber;
-      
-      // Mark note as opened
-      await _memoryService.markNoteAsOpened(_currentNoteName!);
-      
-      // Auto-play note after setup
-      if (_isLoaded) {
-        _autoPlayNote();
-      }
-    }
+    final progress = await _memoryService.getUserProgress();
+    setState(() {
+      _userProgress = progress;
+    });
   }
 
   Future<void> _loadQuestions() async {
@@ -99,26 +83,58 @@ class _DescribingPageState extends State<DescribingPage> {
       final yamlData = loadYaml(yamlString);
       final questionsData = yamlData['questions'] as List;
       
-      setState(() {
-        _questions = questionsData
-            .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
-            .toList();
-      });
-      // Auto-play note after questions are loaded
+      _allQuestions = questionsData
+          .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
+          .toList();
+      
+      // Select random questions
+      _selectRandomQuestions();
       _autoPlayNote();
     } catch (e) {
       print('Error loading questions: $e');
-      // Show error message if YAML fails
       setState(() {
-        _questions = [];
+        _allQuestions = [];
+        _selectedQuestions = [];
       });
     }
   }
 
-  void _replayNote() {
-    if (_isLoaded) {
-      _midiService.playNote(_currentNoteMidi);
+  void _selectRandomQuestions() {
+    final random = Random();
+    final questionCount = widget.questionCount.clamp(1, _allQuestions.length);
+    
+    // Shuffle and take first N questions
+    final shuffled = List<DescribingQuestion>.from(_allQuestions)..shuffle(random);
+    setState(() {
+      _selectedQuestions = shuffled.take(questionCount).toList();
+    });
+  }
+
+  Future<void> _setupRandomNote() async {
+    final learnedNotes = List<String>.from(_userProgress['synestetic_pitch']['leaned_notes']);
+    
+    if (learnedNotes.isEmpty) {
+      // No learned notes, can't play guess mode
+      return;
     }
+    
+    // For now, all notes have weight 1
+    final weights = List<double>.filled(learnedNotes.length, 1.0);
+    final selectedNote = weightedRandomChoice(learnedNotes, weights);
+    
+    final note = Note.fromName(selectedNote);
+    setState(() {
+      _currentNoteName = selectedNote;
+      _currentNoteMidi = note.midiNumber;
+    });
+    
+    if (_isLoaded) {
+      _autoPlayNote();
+    }
+  }
+
+  void _replayNote() {
+    _midiService.playNote(_currentNoteMidi);
   }
 
   void _selectOption(String option) {
@@ -127,80 +143,81 @@ class _DescribingPageState extends State<DescribingPage> {
     });
   }
 
-  void _nextQuestion() {
-    if (_currentQuestionIndex < _questions.length - 1) {
-      // Save the answer if selected
-      if (_selectedOption != null) {
-        _answers[_questions[_currentQuestionIndex].key] = _selectedOption!;
-      }
-      
+  void _nextQuestion() async {
+    if (_selectedOption == null) return;
+    
+    // Save answer
+    final currentQuestion = _selectedQuestions[_currentQuestionIndex];
+    _answers[currentQuestion.key] = _selectedOption!;
+    
+    if (_currentQuestionIndex < _selectedQuestions.length - 1) {
+      // Move to next question
       setState(() {
         _currentQuestionIndex++;
         _selectedOption = null;
       });
-      
-      // Auto-play note for new question
       _autoPlayNote();
     } else {
-      // Save the last answer if selected and finish
-      if (_selectedOption != null) {
-        _answers[_questions[_currentQuestionIndex].key] = _selectedOption!;
-      }
+      // All questions answered - update statistics and show note selection
+      await _updateStatistics();
       
-      // Show summarization
-      _showSummarization();
+      // Navigate to note selection page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GuessNoteSelectionPage(
+            actualNoteName: _currentNoteName!,
+            sessionAnswers: _answers,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _updateStatistics() async {
+    // Update statistics for the guessed note
+    for (final entry in _answers.entries) {
+      final questionKey = entry.key;
+      final selectedOption = entry.value;
+      
+      // Find the question to get all options
+      final question = _selectedQuestions.firstWhere((q) => q.key == questionKey);
+      
+      await _memoryService.updateNoteStatistics(
+        _currentNoteName!,
+        questionKey,
+        selectedOption,
+        question.options
+      );
     }
   }
 
   void _skipQuestion() {
-    if (_currentQuestionIndex < _questions.length - 1) {
+    if (_currentQuestionIndex < _selectedQuestions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
         _selectedOption = null;
       });
-      
-      // Auto-play note for new question
       _autoPlayNote();
     } else {
-      // Show summarization
-      _showSummarization();
+      // Skip last question and go to note selection
+      _updateStatistics().then((_) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => GuessNoteSelectionPage(
+              actualNoteName: _currentNoteName!,
+              sessionAnswers: _answers,
+            ),
+          ),
+        );
+      });
     }
-  }
-
-  void _showSummarization() async {
-    if (_currentNoteName == null) return;
-    
-    // Save statistics for each answered question
-    for (final entry in _answers.entries) {
-      final question = _questions.firstWhere((q) => q.key == entry.key);
-      await _memoryService.updateNoteStatistics(
-        _currentNoteName!, 
-        entry.key, 
-        entry.value, 
-        question.options
-      );
-    }
-    
-    // Mark note as learned if all questions answered
-    if (_answers.length == _questions.length) {
-      await _memoryService.markNoteAsLearned(_currentNoteName!);
-    }
-    
-    // Navigate to statistics screen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => StatisticsPage(
-          selectedNote: _currentNoteName!,
-          sessionAnswers: _answers,
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isLoaded || _questions.isEmpty) {
+    if (!_isLoaded || _selectedQuestions.isEmpty || _currentNoteName == null) {
       return Scaffold(
         backgroundColor: Colors.grey[100],
         body: const Center(
@@ -209,14 +226,14 @@ class _DescribingPageState extends State<DescribingPage> {
       );
     }
 
-    final currentQuestion = _questions[_currentQuestionIndex];
-    final progress = (_currentQuestionIndex + 1) / _questions.length;
+    final currentQuestion = _selectedQuestions[_currentQuestionIndex];
+    final progress = (_currentQuestionIndex + 1) / _selectedQuestions.length;
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
-          'Synesthetic Pitch',
+          'Guess Mode',
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.w600,
@@ -226,6 +243,7 @@ class _DescribingPageState extends State<DescribingPage> {
         elevation: 1,
         iconTheme: const IconThemeData(color: Colors.black87),
         shadowColor: Colors.grey[300],
+        automaticallyImplyLeading: false, // Remove back button
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -289,9 +307,17 @@ class _DescribingPageState extends State<DescribingPage> {
                       LinearProgressIndicator(
                         value: progress,
                         backgroundColor: Colors.grey[300],
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.purple),
                         minHeight: 10,
                         borderRadius: BorderRadius.circular(5),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Question ${_currentQuestionIndex + 1} of ${_selectedQuestions.length}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
                       ),
                       const SizedBox(height: 28),
                       
@@ -329,7 +355,7 @@ class _DescribingPageState extends State<DescribingPage> {
                                     fontSize: 16,
                                   ),
                                 ),
-                                activeColor: Colors.blue[700],
+                                activeColor: Colors.purple[700],
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 8,
@@ -337,11 +363,11 @@ class _DescribingPageState extends State<DescribingPage> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   side: BorderSide(
-                                    color: isSelected ? Colors.blue[700]! : Colors.grey[400]!,
+                                    color: isSelected ? Colors.purple[700]! : Colors.grey[400]!,
                                     width: isSelected ? 2 : 1,
                                   ),
                                 ),
-                                tileColor: isSelected ? Colors.blue[50] : Colors.grey[50],
+                                tileColor: isSelected ? Colors.purple[50] : Colors.grey[50],
                               ),
                             );
                           },
@@ -366,23 +392,24 @@ class _DescribingPageState extends State<DescribingPage> {
                               ),
                             ),
                             child: Text(
-                              _currentQuestionIndex < _questions.length - 1 
+                              _currentQuestionIndex < _selectedQuestions.length - 1 
                                   ? 'Skip' 
                                   : 'Skip & Finish',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.grey[600],
+                                color: Colors.grey[700],
                               ),
                             ),
                           ),
                           
-                          // Next Question Button
+                          // Next Button
                           ElevatedButton(
                             onPressed: _selectedOption != null ? _nextQuestion : null,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _selectedOption != null ? Colors.teal : Colors.grey[400],
+                              backgroundColor: Colors.purple,
                               foregroundColor: Colors.white,
+                              disabledBackgroundColor: Colors.grey[400],
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 32,
                                 vertical: 14,
@@ -390,15 +417,15 @@ class _DescribingPageState extends State<DescribingPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              elevation: _selectedOption != null ? 3 : 0,
+                              elevation: 2,
                             ),
                             child: Text(
-                              _currentQuestionIndex < _questions.length - 1 
+                              _currentQuestionIndex < _selectedQuestions.length - 1 
                                   ? 'Next Question' 
                                   : 'Finish',
                               style: const TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -415,3 +442,4 @@ class _DescribingPageState extends State<DescribingPage> {
     );
   }
 }
+

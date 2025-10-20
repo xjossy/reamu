@@ -1,13 +1,110 @@
 questions:
   - key: 'color'
     question: "What color best evokes this note?"
-    options: ["Red", "Green", "Blue", "Yellow", "Purple", "Orange"]
+    options:
+      - name: "Red"
+      - name: "Orange"
+      - name: "Yellow"
+      - name: "Green"
+      - name: "Blue"
+      - name: "Purple"
+      - name: "White"
+      - name: "Gray"
+      - name: "Black"
+  
+  - key: 'temperature'
+    question: "What temperature does this note evoke?"
+    options:
+      - name: "Freezing"
+      - name: "Cold"
+      - name: "Cool"
+      - name: "Neutral"
+      - name: "Warm"
+      - name: "Hot"
+      - name: "Burning"
+  
+  - key: 'brightness'
+    question: "How bright or dark is this note?"
+    options:
+      - name: "Very Dark"
+      - name: "Dark"
+      - name: "Dim"
+      - name: "Neutral"
+      - name: "Bright"
+      - name: "Very Bright"
+      - name: "Glowing"
+  
   - key: 'size'
     question: "How would you describe the 'size' of this note?"
-    options: ["Tiny", "Small", "Medium", "Large", "Huge"]
+    options:
+      - name: "Tiny"
+      - name: "Small"
+      - name: "Medium"
+      - name: "Large"
+      - name: "Huge"
+      - name: "Enormous"
+  
   - key: 'texture'
     question: "What texture or feeling does this note suggest?"
-    options: ["Smooth", "Rough", "Warm", "Cool", "Sharp", "Soft"]
+    options:
+      - name: "Smooth"
+      - name: "Rough"
+      - name: "Soft"
+      - name: "Hard"
+      - name: "Sharp"
+      - name: "Fuzzy"
+      - name: "Silky"
+  
+  - key: 'motion'
+    question: "What kind of motion does this note suggest?"
+    options:
+      - name: "Still"
+      - name: "Slow"
+      - name: "Flowing"
+      - name: "Pulsing"
+      - name: "Fast"
+      - name: "Vibrating"
+      - name: "Chaotic"
+  
   - key: 'shape'
     question: "Which shape comes to mind for this note?"
-    options: ["Circle", "Square", "Triangle", "Star", "Wavy Line"]
+    options:
+      - name: "Circle"
+      - name: "Square"
+      - name: "Triangle"
+      - name: "Star"
+      - name: "Spiral"
+      - name: "Wavy Line"
+      - name: "Dot"
+  
+  - key: 'body_position'
+    question: "Where in your body do you feel this note?"
+    options:
+      - name: "Head/Crown"
+      - name: "Forehead/Eyes"
+      - name: "Throat"
+      - name: "Chest/Heart"
+      - name: "Stomach"
+      - name: "Lower Abdomen"
+      - name: "Whole Body"
+  
+  - key: 'spatial_orientation'
+    question: "Where in space does this note feel positioned?"
+    options:
+      - name: "Above"
+      - name: "Forward"
+      - name: "Right"
+      - name: "Center"
+      - name: "Left"
+      - name: "Behind"
+      - name: "Below"
+  
+  - key: 'weight'
+    question: "How heavy or light does this note feel?"
+    options:
+      - name: "Weightless"
+      - name: "Very Light"
+      - name: "Light"
+      - name: "Neutral"
+      - name: "Heavy"
+      - name: "Very Heavy"

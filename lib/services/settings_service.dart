@@ -53,4 +53,10 @@ class SettingsService {
     final currentIndex = await getCurrentNoteIndex(userProgress);
     return currentIndex < noteSequence.length;
   }
+
+  Future<int> getGuessQuestionsCount() async {
+    final settings = await getSettings();
+    final count = settings['synestetic_pitch']?['guess_questions'] as int?;
+    return count ?? 5; // Default to 5 if not specified
+  }
 }

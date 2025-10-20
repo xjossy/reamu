@@ -39,24 +39,30 @@ class GlobalMemoryService {
 
   Future<void> updateNoteStatistics(String noteName, String questionKey, String answer, List<String> allOptions) async {
     final progress = await getUserProgress();
+    final noteStatistics = progress['synestetic_pitch']['note_statistics'];
     
     // Initialize note statistics if not exists
-    if (!progress['synestetic_pitch']['note_statistics'].containsKey(noteName)) {
-      progress['synestetic_pitch']['note_statistics'][noteName] = {
+    if (!noteStatistics.containsKey(noteName)) {
+      noteStatistics[noteName] = {
         'questions': {}
       };
     }
+
+    final questions = noteStatistics[noteName]['questions'];
     
     // Initialize question if not exists
-    if (!progress['synestetic_pitch']['note_statistics'][noteName]['questions'].containsKey(questionKey)) {
-      progress['synestetic_pitch']['note_statistics'][noteName]['questions'][questionKey] = 
-          List.filled(allOptions.length, 0);
+    if (!questions.containsKey(questionKey)) {
+      questions[questionKey] = List.filled(allOptions.length, 0);
     }
     
     // Find answer index and increment
     final answerIndex = allOptions.indexOf(answer);
     if (answerIndex >= 0) {
-      progress['synestetic_pitch']['note_statistics'][noteName]['questions'][questionKey][answerIndex]++;
+      if (answerIndex >= questions[questionKey].length) {
+        final missingCount = (answerIndex - questions[questionKey].length + 1).toInt();
+        questions[questionKey].addAll(List.filled(missingCount, 0));
+      }
+      questions[questionKey][answerIndex]++;
     }
     
     await saveUserProgress(progress);

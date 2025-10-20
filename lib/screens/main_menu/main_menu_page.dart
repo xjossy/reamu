@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/menu_tile.dart';
 import '../absolute_pitch/absolute_pitch_page.dart';
 import '../simple_playing/simple_playing_page.dart';
-import '../synesthetic_pitch/describing_page.dart';
+import '../synesthetic_pitch/synesthetic_menu_page.dart';
 
 class MainMenuPage extends StatelessWidget {
   const MainMenuPage({super.key});
@@ -70,7 +70,7 @@ class MainMenuPage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const DescribingPage(),
+                    builder: (context) => const SynestheticMenuPage(),
                   ),
                 );
               },

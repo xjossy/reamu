@@ -1,0 +1,364 @@
+import 'package:flutter/material.dart';
+import '../../services/global_memory_service.dart';
+import '../../services/settings_service.dart';
+import '../../services/midi_service.dart';
+import '../../models/describing_question.dart';
+import '../../models/note.dart';
+import 'package:flutter/services.dart';
+import 'package:yaml/yaml.dart';
+
+class StatisticsPage extends StatefulWidget {
+  final String selectedNote;
+  final Map<String, String>? sessionAnswers; // Optional - only when coming from learning session
+  
+  const StatisticsPage({
+    super.key, 
+    required this.selectedNote,
+    this.sessionAnswers,
+  });
+
+  @override
+  State<StatisticsPage> createState() => _StatisticsPageState();
+}
+
+class _StatisticsPageState extends State<StatisticsPage> {
+  final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
+  final SettingsService _settingsService = SettingsService.instance;
+  final MidiService _midiService = MidiService();
+  Map<String, dynamic> _userProgress = {};
+  List<DescribingQuestion> _questions = [];
+  bool _isLoading = true;
+  int? _currentNoteMidi;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await _midiService.initialize();
+    await _loadQuestions();
+    
+    final progress = await _memoryService.getUserProgress();
+    final note = Note.fromName(widget.selectedNote);
+    
+    setState(() {
+      _userProgress = progress;
+      _currentNoteMidi = note.midiNumber;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadQuestions() async {
+    try {
+      final yamlString = await rootBundle.loadString('assets/describing_questions.yaml');
+      final yamlData = loadYaml(yamlString);
+      final questionsData = yamlData['questions'] as List;
+      
+      setState(() {
+        _questions = questionsData
+            .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
+            .toList();
+      });
+    } catch (e) {
+      print('Error loading questions: $e');
+      setState(() {
+        _questions = [];
+      });
+    }
+  }
+
+  void _playNote() {
+    if (_currentNoteMidi != null) {
+      _midiService.playNote(_currentNoteMidi!);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: const Text(
+            'Statistics',
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 1,
+          iconTheme: const IconThemeData(color: Colors.black87),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    final noteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.selectedNote];
+    final hasStatistics = noteStats != null;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          'Note Statistics',
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 1,
+        iconTheme: const IconThemeData(color: Colors.black87),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.music_note),
+            onPressed: _playNote,
+            tooltip: 'Play Note',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Note Header
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24.0),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    colors: [Colors.teal[50]!, Colors.teal[100]!],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    if (widget.sessionAnswers != null) ...[
+                      const Text(
+                        'Session Complete!',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Note: ${widget.selectedNote}',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal[700],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        IconButton(
+                          icon: Icon(Icons.play_circle, color: Colors.teal[700], size: 40),
+                          onPressed: _playNote,
+                          tooltip: 'Play Note',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            if (hasStatistics) ...[
+              // Statistics for each question (filter out unanswered questions)
+              ...(_questions.where((question) {
+                final noteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.selectedNote];
+                final questionStatsRaw = noteStats?['questions']?[question.key];
+                return questionStatsRaw != null; // Only show questions that have been answered
+              }).map((question) => _buildQuestionStats(question))),
+            ] else ...[
+              // No statistics yet
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.analytics_outlined,
+                        size: 80,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No Statistics Yet',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Complete learning sessions to see statistics here.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 32),
+
+            // Back to Menu Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  // Pop back to synesthetic menu (mode menu)
+                  Navigator.of(context).popUntil((route) {
+                    // Keep popping until we find SynestheticMenuPage or reach the main menu
+                    return route.settings.name == '/synesthetic_menu' || 
+                           (route is MaterialPageRoute && route.builder.toString().contains('SynestheticMenuPage')) ||
+                           route.isFirst;
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Back to Menu',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuestionStats(DescribingQuestion question) {
+    final noteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.selectedNote];
+    final questionStatsRaw = noteStats?['questions']?[question.key];
+    final questionStats = questionStatsRaw != null ? List<int>.from(questionStatsRaw) : null;
+    
+    // Get current session answer if this is from a learning session
+    final currentAnswer = widget.sessionAnswers?[question.key];
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              question.question,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Progress bars for each option (filter out options with 0 count)
+            ...question.options.asMap().entries.where((entry) {
+              final index = entry.key;
+              final count = questionStats != null && index < questionStats.length ? questionStats[index] : 0;
+              return count > 0; // Only show options that have been selected at least once
+            }).map((entry) {
+              final index = entry.key;
+              final option = entry.value;
+              final count = questionStats != null && index < questionStats.length ? questionStats[index] : 0;
+              final total = questionStats?.reduce((a, b) => a + b) ?? 0;
+              final percentage = total > 0 ? count / total : 0.0;
+              final isCurrentAnswer = option == currentAnswer;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          option,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: isCurrentAnswer ? FontWeight.bold : FontWeight.w500,
+                            color: isCurrentAnswer ? Colors.teal[700] : Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          '$count time${count != 1 ? 's' : ''}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: isCurrentAnswer ? FontWeight.bold : FontWeight.normal,
+                            color: isCurrentAnswer ? Colors.teal[700] : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    LinearProgressIndicator(
+                      value: percentage,
+                      backgroundColor: Colors.grey[300],
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isCurrentAnswer ? Colors.teal[600]! : Colors.grey[600]!,
+                      ),
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    if (total > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${(percentage * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+}

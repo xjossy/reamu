@@ -10,10 +10,24 @@ class DescribingQuestion {
   });
 
   factory DescribingQuestion.fromJson(Map<String, dynamic> json) {
+    // Parse options - can be either List<String> or List<Map> with 'name' field
+    final optionsRaw = json['options'] as List;
+    final List<String> parsedOptions;
+    
+    if (optionsRaw.isNotEmpty && optionsRaw.first is Map) {
+      // New format: List of dictionaries with 'name' field
+      parsedOptions = optionsRaw
+          .map((option) => (option as Map)['name'] as String)
+          .toList();
+    } else {
+      // Old format: List of strings (backward compatibility)
+      parsedOptions = List<String>.from(optionsRaw);
+    }
+    
     return DescribingQuestion(
       key: json['key'] as String,
       question: json['question'] as String,
-      options: List<String>.from(json['options'] as List),
+      options: parsedOptions,
     );
   }
 
