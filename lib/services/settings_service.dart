@@ -59,4 +59,10 @@ class SettingsService {
     final count = settings['synestetic_pitch']?['guess_questions'] as int?;
     return count ?? 5; // Default to 5 if not specified
   }
+
+  Future<int> getSessionLengthMinutes() async {
+    final settings = await getSettings();
+    final minutes = settings['synestetic_pitch']?['session_length_minutes'] as int?;
+    return minutes ?? 20; // Default to 20 minutes if not specified
+  }
 }

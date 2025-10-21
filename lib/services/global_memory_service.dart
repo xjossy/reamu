@@ -96,9 +96,119 @@ class GlobalMemoryService {
         'started': false,
         'opened_notes': [],
         'leaned_notes': [],
-        'note_statistics': {}
+        'note_statistics': {},
+        'level': 1,
+        'note_scores': {}
       }
     };
+  }
+
+  Future<void> updateNoteScore(String noteName, int scoreChange) async {
+    final progress = await getUserProgress();
+    
+    // Ensure synestetic_pitch section exists
+    if (!progress.containsKey('synestetic_pitch')) {
+      progress['synestetic_pitch'] = {};
+    }
+    
+    // Ensure note_scores exists and is properly initialized
+    if (!progress['synestetic_pitch'].containsKey('note_scores') || 
+        progress['synestetic_pitch']['note_scores'] == null) {
+      progress['synestetic_pitch']['note_scores'] = <String, dynamic>{};
+    }
+    
+    final noteScores = progress['synestetic_pitch']['note_scores'] as Map<String, dynamic>;
+    
+    // Initialize score if not exists
+    if (!noteScores.containsKey(noteName)) {
+      noteScores[noteName] = 0;
+    }
+    
+    // Update score
+    noteScores[noteName] = (noteScores[noteName] as int) + scoreChange;
+    
+    await saveUserProgress(progress);
+    print('Updated score for $noteName: ${noteScores[noteName]} (change: $scoreChange)');
+  }
+
+  Future<int> getNoteScore(String noteName) async {
+    final progress = await getUserProgress();
+    
+    // Ensure synestetic_pitch section exists
+    if (!progress.containsKey('synestetic_pitch')) {
+      return 0;
+    }
+    
+    // Ensure note_scores exists
+    if (!progress['synestetic_pitch'].containsKey('note_scores') || 
+        progress['synestetic_pitch']['note_scores'] == null) {
+      return 0;
+    }
+    
+    final noteScores = progress['synestetic_pitch']['note_scores'] as Map<String, dynamic>;
+    return noteScores[noteName] as int? ?? 0;
+  }
+
+  Future<int> getCurrentLevel() async {
+    final progress = await getUserProgress();
+    
+    // Ensure synestetic_pitch section exists
+    if (!progress.containsKey('synestetic_pitch')) {
+      return 1;
+    }
+    
+    return progress['synestetic_pitch']['level'] as int? ?? 1;
+  }
+
+  Future<Map<String, int>> getAllNoteScores() async {
+    final progress = await getUserProgress();
+    
+    // Ensure synestetic_pitch section exists
+    if (!progress.containsKey('synestetic_pitch')) {
+      return {};
+    }
+    
+    // Ensure note_scores exists
+    if (!progress['synestetic_pitch'].containsKey('note_scores') || 
+        progress['synestetic_pitch']['note_scores'] == null) {
+      return {};
+    }
+    
+    final noteScores = progress['synestetic_pitch']['note_scores'] as Map<String, dynamic>;
+    return noteScores.map((key, value) => MapEntry(key, value as int));
+  }
+
+  // Debug methods
+  Future<void> printUserProgress() async {
+    final progress = await getUserProgress();
+    print('=== USER PROGRESS DEBUG ===');
+    print('Raw JSON: ${jsonEncode(progress)}');
+    print('Synesthetic Pitch: ${progress['synestetic_pitch']}');
+    if (progress['synestetic_pitch'] != null) {
+      final sp = progress['synestetic_pitch'] as Map<String, dynamic>;
+      print('Started: ${sp['started']}');
+      print('Opened Notes: ${sp['opened_notes']}');
+      print('Learned Notes: ${sp['leaned_notes']}');
+      print('Level: ${sp['level']}');
+      print('Note Scores: ${sp['note_scores']}');
+      print('Note Statistics: ${sp['note_statistics']}');
+    }
+    print('========================');
+  }
+
+  Future<void> resetUserProgress() async {
+    final defaultProgress = _getDefaultProgress();
+    await saveUserProgress(defaultProgress);
+    print('User progress reset to default');
+  }
+
+  Future<void> resetNoteScores() async {
+    final progress = await getUserProgress();
+    if (progress.containsKey('synestetic_pitch')) {
+      progress['synestetic_pitch']['note_scores'] = <String, dynamic>{};
+      await saveUserProgress(progress);
+      print('Note scores reset');
+    }
   }
 
   Future<File> _getFile() async {

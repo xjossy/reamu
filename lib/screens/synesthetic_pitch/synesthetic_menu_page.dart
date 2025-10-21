@@ -5,6 +5,7 @@ import 'learn_page.dart';
 import 'guess_page.dart';
 import 'statistics_page.dart';
 import 'learning_intro_page.dart';
+import 'session_page.dart';
 
 class SynestheticMenuPage extends StatefulWidget {
   const SynestheticMenuPage({super.key});
@@ -111,72 +112,122 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
         child: Column(
           children: [
             // Main Action Buttons
-            Row(
+            Column(
               children: [
-                // Learn Button
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _canLearn() ? () {
-                      // Find the first unlearned note
-                      final openedNotes = List<String>.from(_userProgress['synestetic_pitch']['opened_notes']);
-                      final learnedNotes = List<String>.from(_userProgress['synestetic_pitch']['leaned_notes']);
-                      final firstUnlearnedNote = openedNotes.firstWhere((note) => !learnedNotes.contains(note));
-                      
-                      // Navigate to learning intro page
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => LearningIntroPage(noteName: firstUnlearnedNote),
+                Row(
+                  children: [
+                    // Learn Button
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _canLearn() ? () {
+                          // Find the first unlearned note
+                          final openedNotes = List<String>.from(_userProgress['synestetic_pitch']['opened_notes']);
+                          final learnedNotes = List<String>.from(_userProgress['synestetic_pitch']['leaned_notes']);
+                          final firstUnlearnedNote = openedNotes.firstWhere((note) => !learnedNotes.contains(note));
+                          
+                          // Navigate to learning intro page
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => LearningIntroPage(noteName: firstUnlearnedNote),
+                            ),
+                          ).then((_) => _loadData()); // Refresh when returning
+                        } : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _canLearn() ? Colors.teal : Colors.grey[400],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: _canLearn() ? 4 : 0,
                         ),
-                      ).then((_) => _loadData()); // Refresh when returning
-                    } : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _canLearn() ? Colors.teal : Colors.grey[400],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.school, size: 32),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Learn',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _canLearn() ? 'Practice opened notes' : 'No notes to learn',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      elevation: _canLearn() ? 4 : 0,
                     ),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.school, size: 32),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Learn',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
+                    const SizedBox(width: 16),
+                    
+                    // Guess Button
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const GuessPage(),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
+                          elevation: 4,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _canLearn() ? 'Practice opened notes' : 'No notes to learn',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                          ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.quiz, size: 32),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Guess',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Test your knowledge',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(height: 16),
                 
-                // Guess Button
-                Expanded(
+                // Session Button
+                SizedBox(
+                  width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const GuessPage(),
+                          builder: (context) => const SessionPage(),
                         ),
-                      );
+                      ).then((_) => _loadData()); // Refresh when returning
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
+                      backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       shape: RoundedRectangleBorder(
@@ -186,10 +237,10 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
                     ),
                     child: Column(
                       children: [
-                        const Icon(Icons.quiz, size: 32),
+                        const Icon(Icons.timeline, size: 32),
                         const SizedBox(height: 8),
                         const Text(
-                          'Guess',
+                          'Session',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -197,7 +248,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'Test your knowledge',
+                          'Guided practice session',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w400,

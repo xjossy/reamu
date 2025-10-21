@@ -9,11 +9,19 @@ import '../../services/settings_service.dart';
 import '../../models/note.dart';
 import '../../utils/weighted_random.dart';
 import 'guess_note_selection_page.dart';
+import '../../services/session_service.dart';
 
 class GuessingPage extends StatefulWidget {
   final int questionCount;
+  final String? sessionId;
+  final String? targetNote; // If provided, use this specific note instead of random
   
-  const GuessingPage({super.key, required this.questionCount});
+  const GuessingPage({
+    super.key, 
+    required this.questionCount,
+    this.sessionId,
+    this.targetNote,
+  });
 
   @override
   State<GuessingPage> createState() => _GuessingPageState();
@@ -23,6 +31,7 @@ class _GuessingPageState extends State<GuessingPage> {
   final MidiService _midiService = MidiService();
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   final SettingsService _settingsService = SettingsService.instance;
+  final SessionService _sessionService = SessionService.instance;
   bool _isLoaded = false;
   List<DescribingQuestion> _allQuestions = [];
   List<DescribingQuestion> _selectedQuestions = [];
@@ -43,7 +52,7 @@ class _GuessingPageState extends State<GuessingPage> {
     await _initializeMidi();
     await _loadUserProgress();
     await _loadQuestions();
-    await _setupRandomNote();
+    await _setupNote();
   }
 
   void _autoPlayNote() {
@@ -110,17 +119,24 @@ class _GuessingPageState extends State<GuessingPage> {
     });
   }
 
-  Future<void> _setupRandomNote() async {
-    final learnedNotes = List<String>.from(_userProgress['synestetic_pitch']['leaned_notes']);
+  Future<void> _setupNote() async {
+    String selectedNote;
     
-    if (learnedNotes.isEmpty) {
-      // No learned notes, can't play guess mode
-      return;
+    // Use target note if provided (from session), otherwise select random
+    if (widget.targetNote != null) {
+      selectedNote = widget.targetNote!;
+    } else {
+      final learnedNotes = List<String>.from(_userProgress['synestetic_pitch']['leaned_notes']);
+      
+      if (learnedNotes.isEmpty) {
+        // No learned notes, can't play guess mode
+        return;
+      }
+      
+      // For now, all notes have weight 1
+      final weights = List<double>.filled(learnedNotes.length, 1.0);
+      selectedNote = weightedRandomChoice(learnedNotes, weights);
     }
-    
-    // For now, all notes have weight 1
-    final weights = List<double>.filled(learnedNotes.length, 1.0);
-    final selectedNote = weightedRandomChoice(learnedNotes, weights);
     
     final note = Note.fromName(selectedNote);
     setState(() {
@@ -168,6 +184,7 @@ class _GuessingPageState extends State<GuessingPage> {
           builder: (context) => GuessNoteSelectionPage(
             actualNoteName: _currentNoteName!,
             sessionAnswers: _answers,
+            sessionId: widget.sessionId,
           ),
         ),
       );

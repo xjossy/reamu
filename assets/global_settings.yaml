@@ -1,4 +1,4 @@
 synestetic_pitch:
   note_sequence: [C4, G4, F3, E4, A3, F4, H3, D4, G3, A4, C#4, E3, F#4, H4, D#4, D3, G#4, C5]
   guess_questions: 5
-
+  session_length_minutes: 20

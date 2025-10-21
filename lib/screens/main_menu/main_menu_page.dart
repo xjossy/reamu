@@ -81,4 +81,3 @@ class MainMenuPage extends StatelessWidget {
     );
   }
 }
-

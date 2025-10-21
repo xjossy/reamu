@@ -4,15 +4,19 @@ import '../../services/settings_service.dart';
 import '../../models/note.dart';
 import '../../services/midi_service.dart';
 import 'statistics_page.dart';
+import 'comparative_stats_page.dart';
+import '../../services/session_service.dart';
 
 class GuessNoteSelectionPage extends StatefulWidget {
   final String actualNoteName;
   final Map<String, String> sessionAnswers;
+  final String? sessionId;
   
   const GuessNoteSelectionPage({
     super.key,
     required this.actualNoteName,
     required this.sessionAnswers,
+    this.sessionId,
   });
 
   @override
@@ -23,6 +27,7 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   final SettingsService _settingsService = SettingsService.instance;
   final MidiService _midiService = MidiService();
+  final SessionService _sessionService = SessionService.instance;
   Map<String, dynamic> _userProgress = {};
   List<String> _noteSequence = [];
   bool _isLoading = true;
@@ -72,57 +77,84 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> {
   void _selectNote(String guessedNoteName) async {
     final isCorrect = guessedNoteName == widget.actualNoteName;
     
-    // Show result dialog
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(
-          isCorrect ? 'Correct! 🎉' : 'Not quite!',
-          style: TextStyle(
-            color: isCorrect ? Colors.green[700] : Colors.orange[700],
-            fontWeight: FontWeight.bold,
+    // Record session result if in a session
+    if (widget.sessionId != null) {
+      if (isCorrect) {
+        await _sessionService.recordCorrectGuess(widget.sessionId!, widget.actualNoteName);
+      } else {
+        await _sessionService.recordIncorrectGuess(widget.sessionId!, widget.actualNoteName, guessedNoteName);
+      }
+    }
+    
+    if (isCorrect) {
+      // Correct answer - show success dialog
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(
+            'Correct! 🎉',
+            style: TextStyle(
+              color: Colors.green[700],
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!isCorrect) ...[
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Text(
-                'You guessed: $guessedNoteName',
-                style: const TextStyle(fontSize: 16),
+                'The note was: ${widget.actualNoteName}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              const SizedBox(height: 8),
             ],
-            Text(
-              'The note was: ${widget.actualNoteName}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                
+                if (widget.sessionId != null) {
+                  // Return to session page
+                  Navigator.of(context).popUntil((route) {
+                    return route.settings.name == '/session' ||
+                           (route is MaterialPageRoute && route.builder.toString().contains('SessionPage')) ||
+                           route.isFirst;
+                  });
+                } else {
+                  // Navigate to statistics page (regular guess mode)
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => StatisticsPage(
+                        selectedNote: widget.actualNoteName,
+                        sessionAnswers: widget.sessionAnswers,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: Text(widget.sessionId != null ? 'Continue Session' : 'View Statistics'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              // Navigate to statistics page
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => StatisticsPage(
-                    selectedNote: widget.actualNoteName,
-                    sessionAnswers: widget.sessionAnswers,
-                  ),
-                ),
-              );
-            },
-            child: const Text('View Statistics'),
+      );
+    } else {
+      // Wrong answer - show comparison page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ComparativeStatsPage(
+            guessedNoteName: guessedNoteName,
+            actualNoteName: widget.actualNoteName,
+            sessionAnswers: widget.sessionAnswers,
+            sessionId: widget.sessionId,
           ),
-        ],
-      ),
-    );
+        ),
+      );
+    }
   }
 
   @override
