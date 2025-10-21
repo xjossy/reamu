@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/settings_service.dart';
-import '../../services/midi_service.dart';
 import '../../models/describing_question.dart';
 import '../../models/note.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
+import '../../mixins/midi_cleanup_mixin.dart';
+import '../../widgets/hold_to_play_button.dart';
 
 class StatisticsPage extends StatefulWidget {
   final String selectedNote;
@@ -21,10 +22,9 @@ class StatisticsPage extends StatefulWidget {
   State<StatisticsPage> createState() => _StatisticsPageState();
 }
 
-class _StatisticsPageState extends State<StatisticsPage> {
+class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   final SettingsService _settingsService = SettingsService.instance;
-  final MidiService _midiService = MidiService();
   Map<String, dynamic> _userProgress = {};
   List<DescribingQuestion> _questions = [];
   bool _isLoading = true;
@@ -37,7 +37,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
   }
 
   Future<void> _loadData() async {
-    await _midiService.initialize();
     await _loadQuestions();
     
     final progress = await _memoryService.getUserProgress();
@@ -69,11 +68,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
     }
   }
 
-  void _playNote() {
-    if (_currentNoteMidi != null) {
-      _midiService.playNote(_currentNoteMidi!);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,11 +109,15 @@ class _StatisticsPageState extends State<StatisticsPage> {
         elevation: 1,
         iconTheme: const IconThemeData(color: Colors.black87),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.music_note),
-            onPressed: _playNote,
-            tooltip: 'Play Note',
-          ),
+          if (_currentNoteMidi != null)
+            HoldToPlayButton(
+              midiNote: _currentNoteMidi!,
+              child: IconButton(
+                icon: const Icon(Icons.music_note),
+                onPressed: () {}, // Required but not used (gesture handled by wrapper)
+                tooltip: 'Play Note (Hold)',
+              ),
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -169,11 +167,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        IconButton(
-                          icon: Icon(Icons.play_circle, color: Colors.teal[700], size: 40),
-                          onPressed: _playNote,
-                          tooltip: 'Play Note',
-                        ),
+                        if (_currentNoteMidi != null)
+                          HoldToPlayButton(
+                            midiNote: _currentNoteMidi!,
+                            child: Icon(Icons.play_circle, color: Colors.teal[700], size: 40),
+                          ),
                       ],
                     ),
                   ],

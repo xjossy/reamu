@@ -22,15 +22,28 @@ class NoteButton extends StatefulWidget {
 class _NoteButtonState extends State<NoteButton> {
   final MidiService _midiService = MidiService();
   bool _isPressed = false;
+  PlayingNote? _currentNote;
 
   void _onNotePressed() {
     setState(() => _isPressed = true);
-    _midiService.playNote(widget.midiNote);
+    
+    // Use manual control for button-pressed notes
+    _currentNote = _midiService.playNoteManual(widget.midiNote);
   }
 
   void _onNoteReleased() {
     setState(() => _isPressed = false);
-    _midiService.stopNote(widget.midiNote);
+    
+    // Stop the note when button is released
+    _currentNote?.stop();
+    _currentNote = null;
+  }
+
+  @override
+  void dispose() {
+    // Safety: ensure note is stopped when widget is disposed
+    _currentNote?.stop();
+    super.dispose();
   }
 
   @override
@@ -88,4 +101,3 @@ class _NoteButtonState extends State<NoteButton> {
     );
   }
 }
-

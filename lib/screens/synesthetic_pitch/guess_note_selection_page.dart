@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/settings_service.dart';
 import '../../models/note.dart';
-import '../../services/midi_service.dart';
 import 'statistics_page.dart';
 import 'comparative_stats_page.dart';
 import '../../services/session_service.dart';
+import '../../mixins/midi_cleanup_mixin.dart';
+import '../../widgets/hold_to_play_button.dart';
 
 class GuessNoteSelectionPage extends StatefulWidget {
   final String actualNoteName;
@@ -23,10 +24,9 @@ class GuessNoteSelectionPage extends StatefulWidget {
   State<GuessNoteSelectionPage> createState() => _GuessNoteSelectionPageState();
 }
 
-class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> {
+class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with MidiCleanupMixin {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   final SettingsService _settingsService = SettingsService.instance;
-  final MidiService _midiService = MidiService();
   final SessionService _sessionService = SessionService.instance;
   Map<String, dynamic> _userProgress = {};
   List<String> _noteSequence = [];
@@ -39,7 +39,6 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> {
   }
 
   Future<void> _loadData() async {
-    await _midiService.initialize();
     final progress = await _memoryService.getUserProgress();
     final noteSequence = await _settingsService.getSynestheticNoteSequence();
     
@@ -69,10 +68,6 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> {
     return learnedNotes.contains(noteName);
   }
 
-  void _playNote(String noteName) {
-    final note = Note.fromName(noteName);
-    _midiService.playNote(note.midiNumber);
-  }
 
   void _selectNote(String guessedNoteName) async {
     final isCorrect = guessedNoteName == widget.actualNoteName;
@@ -236,10 +231,11 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> {
                     final isLearned = _isNoteLearned(noteName);
                     final isActualNote = noteName == widget.actualNoteName;
                     
+                    final note = Note.fromName(noteName);
                     return Expanded(
-                      child: GestureDetector(
+                      child: LongPressToPlayButton(
+                        midiNote: note.midiNumber,
                         onTap: isLearned ? () => _selectNote(noteName) : null,
-                        onLongPress: isLearned ? () => _playNote(noteName) : null,
                         child: Container(
                           height: 50,
                           margin: const EdgeInsets.symmetric(horizontal: 2),

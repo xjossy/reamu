@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
 import '../../services/global_memory_service.dart';
-import '../../services/midi_service.dart';
 import '../../models/describing_question.dart';
 import '../../models/note.dart';
+import '../../mixins/midi_cleanup_mixin.dart';
+import '../../widgets/hold_to_play_button.dart';
 
 class ComparativeStatsPage extends StatefulWidget {
   final String guessedNoteName;
@@ -24,9 +25,8 @@ class ComparativeStatsPage extends StatefulWidget {
   State<ComparativeStatsPage> createState() => _ComparativeStatsPageState();
 }
 
-class _ComparativeStatsPageState extends State<ComparativeStatsPage> {
+class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCleanupMixin {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  final MidiService _midiService = MidiService();
   Map<String, dynamic> _userProgress = {};
   List<DescribingQuestion> _questions = [];
   bool _isLoading = true;
@@ -40,7 +40,6 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> {
   }
 
   Future<void> _loadData() async {
-    await _midiService.initialize();
     await _loadQuestions();
     
     final progress = await _memoryService.getUserProgress();
@@ -74,9 +73,6 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> {
     }
   }
 
-  void _playNote(String noteName, int midiNumber) {
-    _midiService.playNote(midiNumber);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,16 +141,24 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: () => _playNote(widget.guessedNoteName, _guessedNoteMidi!),
-                            icon: const Icon(Icons.volume_up, size: 18),
-                            label: const Text('Listen'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange[600],
-                              foregroundColor: Colors.white,
+                          HoldToPlayButton(
+                            midiNote: _guessedNoteMidi!,
+                            child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(
+                              decoration: BoxDecoration(
+                                color: Colors.orange[600],
                                 borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.volume_up, size: 18, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Listen (Hold)',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -191,16 +195,24 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: () => _playNote(widget.actualNoteName, _actualNoteMidi!),
-                            icon: const Icon(Icons.volume_up, size: 18),
-                            label: const Text('Listen'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green[600],
-                              foregroundColor: Colors.white,
+                          HoldToPlayButton(
+                            midiNote: _actualNoteMidi!,
+                            child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(
+                              decoration: BoxDecoration(
+                                color: Colors.green[600],
                                 borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.volume_up, size: 18, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Listen (Hold)',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

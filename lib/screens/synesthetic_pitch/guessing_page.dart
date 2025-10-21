@@ -10,6 +10,8 @@ import '../../models/note.dart';
 import '../../utils/weighted_random.dart';
 import 'guess_note_selection_page.dart';
 import '../../services/session_service.dart';
+import '../../mixins/midi_cleanup_mixin.dart';
+import '../../widgets/hold_to_play_button.dart';
 
 class GuessingPage extends StatefulWidget {
   final int questionCount;
@@ -27,7 +29,7 @@ class GuessingPage extends StatefulWidget {
   State<GuessingPage> createState() => _GuessingPageState();
 }
 
-class _GuessingPageState extends State<GuessingPage> {
+class _GuessingPageState extends State<GuessingPage> with MidiCleanupMixin {
   final MidiService _midiService = MidiService();
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   final SettingsService _settingsService = SettingsService.instance;
@@ -58,7 +60,11 @@ class _GuessingPageState extends State<GuessingPage> {
   void _autoPlayNote() {
     if (_isLoaded && _selectedQuestions.isNotEmpty) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        _replayNote();
+        // Auto-play note once with timeout (2 seconds)
+        _midiService.playNoteWithTimeout(
+          _currentNoteMidi,
+          timeout: const Duration(seconds: 2),
+        );
       });
     }
   }
@@ -149,9 +155,6 @@ class _GuessingPageState extends State<GuessingPage> {
     }
   }
 
-  void _replayNote() {
-    _midiService.playNote(_currentNoteMidi);
-  }
 
   void _selectOption(String option) {
     setState(() {
@@ -272,12 +275,17 @@ class _GuessingPageState extends State<GuessingPage> {
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 24.0),
               child: ElevatedButton.icon(
-                onPressed: _replayNote,
+                onPressed: () {
+                  _midiService.playNoteWithTimeout(
+                    _currentNoteMidi,
+                    timeout: const Duration(seconds: 5),
+                  );
+                },
                 icon: const Icon(Icons.volume_up, color: Colors.black87),
                 label: const Text(
                   'Replay Note',
                   style: TextStyle(
-                    color: Colors.black87, 
+                    color: Colors.black87,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),

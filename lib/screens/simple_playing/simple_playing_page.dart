@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/midi_service.dart';
 import '../../widgets/note_button.dart';
 import '../../core/constants/app_constants.dart';
+import '../../mixins/midi_cleanup_mixin.dart';
 
 class SimplePlayingPage extends StatefulWidget {
   const SimplePlayingPage({super.key});
@@ -10,7 +11,7 @@ class SimplePlayingPage extends StatefulWidget {
   State<SimplePlayingPage> createState() => _SimplePlayingPageState();
 }
 
-class _SimplePlayingPageState extends State<SimplePlayingPage> {
+class _SimplePlayingPageState extends State<SimplePlayingPage> with MidiCleanupMixin {
   final MidiService _midiService = MidiService();
   bool _isLoaded = false;
 
