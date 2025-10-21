@@ -17,19 +17,32 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   
   SynestheticSession? _currentSession;
   bool _isLoading = true;
-  int _currentLevel = 1;
-  Map<String, int> _noteScores = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    // Subscribe to session updates
+    _sessionService.addSessionUpdateListener(_onSessionUpdated);
+    
     _loadSessionWithAutoStart();
+  }
+  
+  void _onSessionUpdated() {
+    print('🔔 Session update notification received!');
+    if (mounted) {
+      _loadSession();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    
+    // Unsubscribe from session updates
+    _sessionService.removeSessionUpdateListener(_onSessionUpdated);
+    
     super.dispose();
   }
 
@@ -44,26 +57,19 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Refresh session when page becomes visible
-    if (!_isLoading && _currentSession != null) {
-      _loadSession();
-    }
+    // Note: Session updates are now handled via observer pattern subscription
+    // No need to reload here as we get notified immediately when data changes
   }
 
   Future<void> _loadSession() async {
     final session = await _sessionService.getCurrentSession();
-    final level = await _memoryService.getCurrentLevel();
-    final noteScores = await _memoryService.getAllNoteScores();
     
     print('Session loaded: ${session?.id}, completed: ${session?.isCompleted}, notes: ${session?.notesToGuess.length}');
     print('Correct guesses: ${session?.correctlyGuessed.length}, Incorrect: ${session?.incorrectlyGuessed.length}');
     print('Mistakes: ${session?.mistakes}');
-    print('Level: $level, Scores: $noteScores');
     
     setState(() {
       _currentSession = session;
-      _currentLevel = level;
-      _noteScores = noteScores;
       _isLoading = false;
     });
   }
@@ -122,6 +128,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
       await _completeSession();
       return;
     }
+
+    print('🎮 BEFORE GUESSING: Session ${_currentSession!.id}');
+    print('🎮 Correct: ${_currentSession!.correctlyGuessed.length}, Incorrect: ${_currentSession!.incorrectlyGuessed.length}');
 
     // Navigate to guessing page with session context
     Navigator.push(
@@ -226,64 +235,12 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildLevelCard(),
-                  const SizedBox(height: 16),
                   _buildSessionProgressCard(),
                   const SizedBox(height: 24),
                   _buildGuessHistoryCard(),
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildLevelCard() {
-    return Card(
-      elevation: 3,
-      color: Colors.purple[50],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Icon(Icons.star, color: Colors.purple[600], size: 28),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Level $_currentLevel',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.purple[700],
-                  ),
-                ),
-                Text(
-                  'Synesthetic Pitch Training',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.purple[600],
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            if (_noteScores.isNotEmpty) ...[
-              Text(
-                'Total Score: ${_noteScores.values.fold(0, (sum, score) => sum + score)}',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.purple[700],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 

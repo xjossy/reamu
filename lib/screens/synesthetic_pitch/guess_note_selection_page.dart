@@ -79,11 +79,13 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> {
     
     // Record session result if in a session
     if (widget.sessionId != null) {
+      print('💾 Recording guess for session ${widget.sessionId}...');
       if (isCorrect) {
         await _sessionService.recordCorrectGuess(widget.sessionId!, widget.actualNoteName);
       } else {
         await _sessionService.recordIncorrectGuess(widget.sessionId!, widget.actualNoteName, guessedNoteName);
       }
+      print('✅ Guess recorded successfully');
     }
     
     if (isCorrect) {

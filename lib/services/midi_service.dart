@@ -42,6 +42,8 @@ class MidiService {
       return;
     }
 
+    print('🎹 Playing note: $midiNote, sfId: $_soundfontId');
+
     _midiPro.playNote(
       sfId: _soundfontId!,
       channel: 0,
@@ -53,6 +55,8 @@ class MidiService {
   // Stop a note
   void stopNote(int midiNote) {
     if (!_isInitialized || _soundfontId == null) return;
+
+    print('🎹 Stopping note: $midiNote, sfId: $_soundfontId');
 
     _midiPro.stopNote(
       sfId: _soundfontId!,

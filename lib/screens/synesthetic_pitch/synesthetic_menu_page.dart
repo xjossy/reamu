@@ -20,6 +20,8 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   Map<String, dynamic> _userProgress = {};
   List<String> _noteSequence = [];
   bool _isLoading = true;
+  int _currentLevel = 1;
+  Map<String, int> _noteScores = {};
 
   @override
   void initState() {
@@ -29,12 +31,16 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
 
   Future<void> _loadData() async {
     final progress = await _memoryService.getUserProgress();
+    final level = await _memoryService.getCurrentLevel();
+    final noteScores = await _memoryService.getAllNoteScores();
     // Create keyboard order from C3 to C5
     final keyboardNotes = _generateKeyboardNotes();
     
     setState(() {
       _userProgress = progress;
       _noteSequence = keyboardNotes;
+      _currentLevel = level;
+      _noteScores = noteScores;
       _isLoading = false;
     });
   }
@@ -111,6 +117,10 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // Level Card
+            _buildLevelCard(),
+            const SizedBox(height: 16),
+            
             // Main Action Buttons
             Column(
               children: [
@@ -465,6 +475,56 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLevelCard() {
+    return Card(
+      elevation: 3,
+      color: Colors.purple[50],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Icon(Icons.star, color: Colors.purple[600], size: 28),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Level $_currentLevel',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.purple[700],
+                  ),
+                ),
+                Text(
+                  'Synesthetic Pitch Training',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.purple[600],
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            if (_noteScores.isNotEmpty) ...[
+              Text(
+                'Total: ${_noteScores.values.fold(0, (sum, score) => sum + score)}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.purple[700],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

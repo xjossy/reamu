@@ -225,6 +225,7 @@ class _GuessingPageState extends State<GuessingPage> {
             builder: (context) => GuessNoteSelectionPage(
               actualNoteName: _currentNoteName!,
               sessionAnswers: _answers,
+              sessionId: widget.sessionId,
             ),
           ),
         );

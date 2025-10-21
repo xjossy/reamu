@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:path_provider/path_provider.dart';
+import 'settings_service.dart';
 
 class GlobalMemoryService {
   static const String _fileName = 'user_progress.json';
@@ -12,6 +14,8 @@ class GlobalMemoryService {
     _instance ??= GlobalMemoryService._();
     return _instance!;
   }
+  
+  final SettingsService _settingsService = SettingsService.instance;
 
   Future<Map<String, dynamic>> getUserProgress() async {
     try {
@@ -124,11 +128,17 @@ class GlobalMemoryService {
       noteScores[noteName] = 0;
     }
     
-    // Update score
-    noteScores[noteName] = (noteScores[noteName] as int) + scoreChange;
+    // Get maximum score from settings
+    final settings = await _settingsService.getSettings();
+    final maxScore = settings['synestetic_pitch']['maximum_note_score'] as int;
+    
+    // Update score and clamp between 0 and max
+    int newScore = (noteScores[noteName] as int) + scoreChange;
+    newScore = max(0, min(maxScore, newScore));
+    noteScores[noteName] = newScore;
     
     await saveUserProgress(progress);
-    print('Updated score for $noteName: ${noteScores[noteName]} (change: $scoreChange)');
+    print('Updated score for $noteName: ${noteScores[noteName]} (change: $scoreChange, clamped to 0-$maxScore)');
   }
 
   Future<int> getNoteScore(String noteName) async {

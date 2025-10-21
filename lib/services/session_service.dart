@@ -19,6 +19,9 @@ class SessionService {
 
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   final SettingsService _settingsService = SettingsService.instance;
+  
+  // Observer pattern: callbacks for session updates
+  final List<Function()> _sessionUpdateListeners = [];
 
   Future<File> _getFile() async {
     final directory = await getApplicationDocumentsDirectory();
@@ -114,6 +117,9 @@ class SessionService {
       await _memoryService.updateNoteScore(noteName, 10);
       
       print('Correct guess saved. Total correct: ${updatedSession.correctlyGuessed.length}');
+      
+      // Notify all subscribers that session was updated
+      _notifySessionUpdated();
     } else {
       print('Session not found: $sessionId');
     }
@@ -138,6 +144,9 @@ class SessionService {
       await _memoryService.updateNoteScore(guessedNote, -5);
       
       print('Incorrect guess saved. Total incorrect: ${updatedSession.incorrectlyGuessed.length}');
+      
+      // Notify all subscribers that session was updated
+      _notifySessionUpdated();
     } else {
       print('Session not found: $sessionId');
     }
@@ -195,6 +204,26 @@ class SessionService {
       print('  Progress: ${(session.progress * 100).toStringAsFixed(1)}%');
     }
     print('===================');
+  }
+
+  // Subscribe to session updates
+  void addSessionUpdateListener(Function() callback) {
+    print('📢 Subscriber added to session updates');
+    _sessionUpdateListeners.add(callback);
+  }
+
+  // Unsubscribe from session updates
+  void removeSessionUpdateListener(Function() callback) {
+    print('📢 Subscriber removed from session updates');
+    _sessionUpdateListeners.remove(callback);
+  }
+
+  // Notify all subscribers that session was updated
+  void _notifySessionUpdated() {
+    print('📢 Notifying ${_sessionUpdateListeners.length} subscribers of session update');
+    for (var callback in _sessionUpdateListeners) {
+      callback();
+    }
   }
 }
 
