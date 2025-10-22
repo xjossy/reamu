@@ -1,3 +1,4 @@
+import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/settings_service.dart';
@@ -60,8 +61,8 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
             .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
             .toList();
       });
-    } catch (e) {
-      print('Error loading questions: $e');
+    } catch (e, stackTrace) {
+      Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'Statistics');
       setState(() {
         _questions = [];
       });

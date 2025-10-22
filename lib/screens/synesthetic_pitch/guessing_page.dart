@@ -1,3 +1,4 @@
+import '../../services/logging_service.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -105,8 +106,8 @@ class _GuessingPageState extends State<GuessingPage> with MidiCleanupMixin {
       // Select random questions
       _selectRandomQuestions();
       _autoPlayNote();
-    } catch (e) {
-      print('Error loading questions: $e');
+    } catch (e, stackTrace) {
+      Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'Guessing');
       setState(() {
         _allQuestions = [];
         _selectedQuestions = [];

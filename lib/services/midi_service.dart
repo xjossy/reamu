@@ -1,3 +1,4 @@
+import 'logging_service.dart';
 import 'dart:async';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import '../core/constants/app_constants.dart';
@@ -24,7 +25,7 @@ class PlayingNote {
     _timeoutTimer?.cancel();
     _timeoutTimer = Timer(duration, () {
       if (!_isStopped) {
-        print('⏰ Note $midiNote timed out, auto-stopping');
+        Log.w('⏰ Note $midiNote timed out, auto-stopping', tag: 'MIDI');
         stop();
       }
     });
@@ -63,10 +64,10 @@ class MidiService {
       _soundfontId = sfId;
       _isInitialized = true;
       
-      print('✅ MIDI Service initialized with SF ID: $sfId');
+      Log.i('✅ MIDI Service initialized with SF ID: $sfId', tag: 'MIDI');
       return true;
-    } catch (e) {
-      print('❌ Error initializing MIDI: $e');
+    } catch (e, stackTrace) {
+      Log.e('❌ Error initializing MIDI', error: e, stackTrace: stackTrace, tag: 'MIDI');
       return false;
     }
   }
@@ -78,11 +79,11 @@ class MidiService {
     stopNote(midiNote);
 
     if (!_isInitialized || _soundfontId == null) {
-      print('❌ MIDI not initialized');
+      Log.w('❌ MIDI not initialized', tag: 'MIDI');
       return PlayingNote(midiNote, this); // Return dummy handle
     }
 
-    print('🎹 Playing note (manual): $midiNote, sfId: $_soundfontId');
+    Log.d('🎹 Playing note (manual): $midiNote, sfId: $_soundfontId', tag: 'MIDI');
 
     _midiPro.playNote(
       sfId: _soundfontId!,
@@ -118,7 +119,7 @@ class MidiService {
   void _stopNoteInternal(int midiNote) {
     if (!_isInitialized || _soundfontId == null) return;
 
-    print('🎹 Stopping note: $midiNote, sfId: $_soundfontId');
+    Log.d('🎹 Stopping note: $midiNote, sfId: $_soundfontId', tag: 'MIDI');
 
     _midiPro.stopNote(
       sfId: _soundfontId!,
@@ -144,12 +145,9 @@ class MidiService {
   void stopAllNotes() {
     if (!_isInitialized || _soundfontId == null) return;
     
-    print('🛑 Stopping all notes (${_activeNotes.length} active)');
+    Log.i('🛑 Stopping all notes (${_activeNotes.length} active)', tag: 'MIDI');
 
-    for (final note in _activeNotes.values) {
-      note.stop();
-    }
-
+    _activeNotes.values.forEach((note) => note.stop());
     _activeNotes.clear();
   }
 
@@ -160,7 +158,7 @@ class MidiService {
 
   /// Dispose and cleanup
   void dispose() {
-    print('🛑 Disposing MIDI service');
+    Log.i('🛑 Disposing MIDI service', tag: 'MIDI');
     stopAllNotes();
   }
 }

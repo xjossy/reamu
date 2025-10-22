@@ -1,3 +1,4 @@
+import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/settings_service.dart';
@@ -74,13 +75,13 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
     
     // Record session result if in a session
     if (widget.sessionId != null) {
-      print('💾 Recording guess for session ${widget.sessionId}...');
+      Log.d('💾 Recording guess for session ${widget.sessionId}...', tag: 'GuessSelect');
       if (isCorrect) {
         await _sessionService.recordCorrectGuess(widget.sessionId!, widget.actualNoteName);
       } else {
         await _sessionService.recordIncorrectGuess(widget.sessionId!, widget.actualNoteName, guessedNoteName);
       }
-      print('✅ Guess recorded successfully');
+      Log.i('✅ Guess recorded successfully', tag: 'GuessSelect');
     }
     
     if (isCorrect) {

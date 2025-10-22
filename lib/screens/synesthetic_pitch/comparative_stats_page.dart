@@ -1,3 +1,4 @@
+import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
@@ -65,8 +66,8 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
             .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
             .toList();
       });
-    } catch (e) {
-      print('Error loading questions: $e');
+    } catch (e, stackTrace) {
+      Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'ComparativeStats');
       setState(() {
         _questions = [];
       });

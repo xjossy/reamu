@@ -1,3 +1,4 @@
+import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
 import '../../services/session_service.dart';
 import '../../services/global_memory_service.dart';
@@ -30,7 +31,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   }
   
   void _onSessionUpdated() {
-    print('🔔 Session update notification received!');
+    Log.d('🔔 Session update notification received!', tag: 'SessionPage');
     if (mounted) {
       _loadSession();
     }
@@ -64,9 +65,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   Future<void> _loadSession() async {
     final session = await _sessionService.getCurrentSession();
     
-    print('Session loaded: ${session?.id}, completed: ${session?.isCompleted}, notes: ${session?.notesToGuess.length}');
-    print('Correct guesses: ${session?.correctlyGuessed.length}, Incorrect: ${session?.incorrectlyGuessed.length}');
-    print('Mistakes: ${session?.mistakes}');
+    Log.d('Session loaded: ${session?.id}, completed: ${session?.isCompleted}, notes: ${session?.notesToGuess.length}', tag: 'SessionPage');
+    Log.d('Correct guesses: ${session?.correctlyGuessed.length}, Incorrect: ${session?.incorrectlyGuessed.length}', tag: 'SessionPage');
+    Log.d('Mistakes: ${session?.mistakes}', tag: 'SessionPage');
     
     setState(() {
       _currentSession = session;
@@ -129,8 +130,8 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
       return;
     }
 
-    print('🎮 BEFORE GUESSING: Session ${_currentSession!.id}');
-    print('🎮 Correct: ${_currentSession!.correctlyGuessed.length}, Incorrect: ${_currentSession!.incorrectlyGuessed.length}');
+    Log.d('🎮 BEFORE GUESSING: Session ${_currentSession!.id}', tag: 'SessionPage');
+    Log.d('🎮 Correct: ${_currentSession!.correctlyGuessed.length}, Incorrect: ${_currentSession!.incorrectlyGuessed.length}', tag: 'SessionPage');
 
     // Navigate to guessing page with session context
     Navigator.push(

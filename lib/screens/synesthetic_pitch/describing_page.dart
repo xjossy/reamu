@@ -1,3 +1,4 @@
+import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
@@ -106,8 +107,8 @@ class _DescribingPageState extends State<DescribingPage> {
       });
       // Auto-play note after questions are loaded
       _autoPlayNote();
-    } catch (e) {
-      print('Error loading questions: $e');
+    } catch (e, stackTrace) {
+      Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'Describing');
       // Show error message if YAML fails
       setState(() {
         _questions = [];

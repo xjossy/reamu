@@ -1,3 +1,4 @@
+import 'logging_service.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
 
@@ -20,8 +21,8 @@ class SettingsService {
       final yamlData = loadYaml(yamlString);
       _settings = Map<String, dynamic>.from(yamlData);
       return _settings!;
-    } catch (e) {
-      print('Error loading settings: $e');
+    } catch (e, stackTrace) {
+      Log.e('Error loading settings', error: e, stackTrace: stackTrace, tag: 'Settings');
       return {};
     }
   }

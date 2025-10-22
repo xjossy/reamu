@@ -1,5 +1,17 @@
 synestetic_pitch:
   note_sequence: [C4, G4, F3, E4, A3, F4, H3, D4, G3, A4, C#4, E3, F#4, H4, D#4, D3, G#4, C5]
+  start_with_notes: 4
   guess_questions: 5
   session_length_minutes: 20
   maximum_note_score: 100
+  minumum_instant_sessions: 3
+  default_instant_sessions: 7
+  maximum_instant_sessions: 15
+  morning_session_scores: 10
+  morning_session_penalty: 5
+  instant_session_scores: 20
+  instant_session_penalty: 5
+  practice_score: 3
+  practice_penalty: 1
+  practice_gap_minutes: 10
+  time_to_pass_instant_session_min: 90

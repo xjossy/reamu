@@ -1,3 +1,4 @@
+import 'logging_service.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -91,9 +92,9 @@ class DebugService {
     if (!DebugConfig.debugLogs) return;
 
     final data = await getAllUserData();
-    print('=== COMPLETE USER DATA DEBUG ===');
-    print(jsonEncode(data));
-    print('================================');
+    Log.d('=== COMPLETE USER DATA DEBUG ===', tag: 'Debug');
+    Log.d(jsonEncode(data), tag: 'Debug');
+    Log.d('================================', tag: 'Debug');
   }
 
   Future<void> exportUserData() async {
@@ -106,9 +107,9 @@ class DebugService {
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/debug_export.json');
       await file.writeAsString(jsonString);
-      print('Debug data exported to: ${file.path}');
-    } catch (e) {
-      print('Error exporting debug data: $e');
+      Log.i('Debug data exported to: ${file.path}', tag: 'Debug');
+    } catch (e, stackTrace) {
+      Log.e('Error exporting debug data', error: e, stackTrace: stackTrace, tag: 'Debug');
     }
   }
 
@@ -120,9 +121,9 @@ class DebugService {
       await _memoryService.resetUserProgress();
       
       // Clear sessions (we'd need to add this method to SessionService)
-      print('All user data reset');
-    } catch (e) {
-      print('Error resetting data: $e');
+      Log.i('All user data reset', tag: 'Debug');
+    } catch (e, stackTrace) {
+      Log.e('Error resetting data', error: e, stackTrace: stackTrace, tag: 'Debug');
     }
   }
 

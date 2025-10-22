@@ -1,3 +1,4 @@
+import 'logging_service.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -35,11 +36,11 @@ class SessionService {
         final jsonString = await file.readAsString();
         final List<dynamic> sessionsJson = jsonDecode(jsonString);
         final sessions = sessionsJson.map((json) => SynestheticSession.fromJson(json)).toList();
-        print('Loaded ${sessions.length} sessions from disk');
+      Log.i('Loaded ${sessions.length} sessions from disk', tag: 'SessionService');
         return sessions;
       }
-    } catch (e) {
-      print('Error loading sessions: $e');
+    } catch (e, stackTrace) {
+      Log.e('Error loading sessions', error: e, stackTrace: stackTrace, tag: 'SessionService');
     }
     return [];
   }
@@ -49,9 +50,9 @@ class SessionService {
       final file = await _getFile();
       final sessionsJson = sessions.map((session) => session.toJson()).toList();
       await file.writeAsString(jsonEncode(sessionsJson));
-      print('Sessions saved to disk: ${sessions.length} sessions');
-    } catch (e) {
-      print('Error saving sessions: $e');
+    Log.i('Sessions saved to disk: ${sessions.length} sessions', tag: 'SessionService');
+    } catch (e, stackTrace) {
+    Log.e('Error saving sessions', error: e, stackTrace: stackTrace, tag: 'SessionService');
     }
   }
 
@@ -101,7 +102,7 @@ class SessionService {
   }
 
   Future<void> recordCorrectGuess(String sessionId, String noteName) async {
-    print('Recording correct guess: $noteName for session: $sessionId');
+    Log.d('Recording correct guess: $noteName for session: $sessionId', tag: 'SessionService');
     final sessions = await _loadSessions();
     final sessionIndex = sessions.indexWhere((s) => s.id == sessionId);
     
@@ -116,17 +117,17 @@ class SessionService {
       // Update score: +10 points for correct guess
       await _memoryService.updateNoteScore(noteName, 10);
       
-      print('Correct guess saved. Total correct: ${updatedSession.correctlyGuessed.length}');
+      Log.i('Correct guess saved. Total correct: ${updatedSession.correctlyGuessed.length}', tag: 'SessionService');
       
       // Notify all subscribers that session was updated
       _notifySessionUpdated();
     } else {
-      print('Session not found: $sessionId');
+      Log.w('Session not found: $sessionId', tag: 'SessionService');
     }
   }
 
   Future<void> recordIncorrectGuess(String sessionId, String noteName, String guessedNote) async {
-    print('Recording incorrect guess: $noteName -> $guessedNote for session: $sessionId');
+    Log.d('Recording incorrect guess: $noteName -> $guessedNote for session: $sessionId', tag: 'SessionService');
     final sessions = await _loadSessions();
     final sessionIndex = sessions.indexWhere((s) => s.id == sessionId);
     
@@ -143,12 +144,12 @@ class SessionService {
       await _memoryService.updateNoteScore(noteName, -5);
       await _memoryService.updateNoteScore(guessedNote, -5);
       
-      print('Incorrect guess saved. Total incorrect: ${updatedSession.incorrectlyGuessed.length}');
+      Log.i('Incorrect guess saved. Total incorrect: ${updatedSession.incorrectlyGuessed.length}', tag: 'SessionService');
       
       // Notify all subscribers that session was updated
       _notifySessionUpdated();
     } else {
-      print('Session not found: $sessionId');
+      Log.w('Session not found: $sessionId', tag: 'SessionService');
     }
   }
 
@@ -188,39 +189,39 @@ class SessionService {
   // Debug methods
   Future<void> printAllSessions() async {
     final sessions = await _loadSessions();
-    print('=== SESSION DEBUG ===');
-    print('Total sessions: ${sessions.length}');
+    Log.d('=== SESSION DEBUG ===', tag: 'SessionService');
+    Log.d('Total sessions: ${sessions.length}', tag: 'SessionService');
     for (int i = 0; i < sessions.length; i++) {
       final session = sessions[i];
-      print('Session $i:');
-      print('  ID: ${session.id}');
-      print('  Start: ${session.startTime}');
-      print('  End: ${session.endTime}');
-      print('  Completed: ${session.isCompleted}');
-      print('  Notes: ${session.notesToGuess}');
-      print('  Correct: ${session.correctlyGuessed}');
-      print('  Incorrect: ${session.incorrectlyGuessed}');
-      print('  Mistakes: ${session.mistakes}');
-      print('  Progress: ${(session.progress * 100).toStringAsFixed(1)}%');
+      Log.d('Session $i:', tag: 'SessionService');
+      Log.d('  ID: ${session.id}', tag: 'SessionService');
+      Log.d('  Start: ${session.startTime}', tag: 'SessionService');
+      Log.d('  End: ${session.endTime}', tag: 'SessionService');
+      Log.d('  Completed: ${session.isCompleted}', tag: 'SessionService');
+      Log.d('  Notes: ${session.notesToGuess}', tag: 'SessionService');
+      Log.d('  Correct: ${session.correctlyGuessed}', tag: 'SessionService');
+      Log.d('  Incorrect: ${session.incorrectlyGuessed}', tag: 'SessionService');
+      Log.d('  Mistakes: ${session.mistakes}', tag: 'SessionService');
+      Log.d('  Progress: ${(session.progress * 100).toStringAsFixed(1)}%', tag: 'SessionService');
     }
-    print('===================');
+    Log.d('===================', tag: 'SessionService');
   }
 
   // Subscribe to session updates
   void addSessionUpdateListener(Function() callback) {
-    print('📢 Subscriber added to session updates');
+    Log.d('📢 Subscriber added to session updates', tag: 'SessionService');
     _sessionUpdateListeners.add(callback);
   }
 
   // Unsubscribe from session updates
   void removeSessionUpdateListener(Function() callback) {
-    print('📢 Subscriber removed from session updates');
+    Log.d('📢 Subscriber removed from session updates', tag: 'SessionService');
     _sessionUpdateListeners.remove(callback);
   }
 
   // Notify all subscribers that session was updated
   void _notifySessionUpdated() {
-    print('📢 Notifying ${_sessionUpdateListeners.length} subscribers of session update');
+    Log.d('📢 Notifying ${_sessionUpdateListeners.length} subscribers of session update', tag: 'SessionService');
     for (var callback in _sessionUpdateListeners) {
       callback();
     }
