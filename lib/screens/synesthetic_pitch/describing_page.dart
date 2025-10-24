@@ -34,7 +34,15 @@ class _DescribingPageState extends State<DescribingPage> {
   @override
   void initState() {
     super.initState();
-    _initializeApp();
+    // Initialize synchronously to avoid multiple rebuilds
+    _initializeAppSync();
+  }
+
+  void _initializeAppSync() {
+    _initializeApp().catchError((error, stackTrace) {
+      Log.e('Error initializing describing page', error: error, stackTrace: stackTrace, tag: 'Describing');
+      // Don't let initialization errors crash the page
+    });
   }
 
   Future<void> _initializeApp() async {
@@ -105,8 +113,6 @@ class _DescribingPageState extends State<DescribingPage> {
             .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
             .toList();
       });
-      // Auto-play note after questions are loaded
-      _autoPlayNote();
     } catch (e, stackTrace) {
       Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'Describing');
       // Show error message if YAML fails
@@ -201,6 +207,8 @@ class _DescribingPageState extends State<DescribingPage> {
 
   @override
   Widget build(BuildContext context) {
+    Log.d('Building DescribingPage', tag: 'Describing');
+
     if (!_isLoaded || _questions.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.grey[100],

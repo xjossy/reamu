@@ -46,6 +46,17 @@ class DayProgress {
       dayPlan: dayPlan ?? this.dayPlan,
     );
   }
+
+  /// Returns the current instant session number that should be active now,
+  /// or null if the first instant session hasn't started yet.
+  int? getCurrentInstantSession() {
+    return dayPlan.getCurrentInstantSession();
+  }
+
+  /// Returns true if the specified instant session has been completed.
+  bool isInstantSessionComplete(int sessionNumber) {
+    return completedInstantSessions.any((s) => s.number == sessionNumber);
+  }
 }
 
 /// Represents the morning session completion status
@@ -149,6 +160,29 @@ class DayPlan {
       instantSessionTimestamps:
           instantSessionTimestamps ?? this.instantSessionTimestamps,
     );
+  }
+
+  /// Returns the current instant session number that should be active now,
+  /// or null if the first instant session hasn't started yet.
+  int? getCurrentInstantSession() {
+    final now = DateTime.now();
+    
+    // Check if we have any instant sessions planned
+    if (instantSessionTimestamps.isEmpty) {
+      return null;
+    }
+    
+    // Find the current session that should be active
+    // This is the last session that has started (now >= sessionTime)
+    for (int i = instantSessionTimestamps.length - 1; i >= 0; i--) {
+      final sessionTime = instantSessionTimestamps[i];
+      if (now.isAfter(sessionTime) || now.isAtSameMomentAs(sessionTime)) {
+        return i + 1; // Session numbers are 1-based
+      }
+    }
+    
+    // No session should be active yet
+    return null;
   }
 }
 

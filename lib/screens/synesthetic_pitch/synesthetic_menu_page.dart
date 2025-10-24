@@ -103,7 +103,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
               builder: (context) => LearningIntroPage(noteName: nextNote!),
             ),
           );
-          // Reload data after returning (don't recurse, just reload once)
+          // Reload data after returning
           await _loadData();
         }
       }
@@ -542,16 +542,15 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
       
       final rowIcons = <Widget>[];
       for (int i = 0; i < rowSessions.length; i++) {
-        final sessionIndex = startIndex + i;
+        final sessionIndex = startIndex + i + 1;
         final sessionTime = rowSessions[i];
-        final isCompleted = completedInstantSessions.any((s) => s.number == sessionIndex + 1);
+        final isCompleted = _dayProgress!.isInstantSessionComplete(sessionIndex);
         final isMissed = _isSessionMissed(sessionIndex, sessionTime);
         
         rowIcons.add(_buildInstantSessionIconWithTime(
           isCompleted, 
           isMissed, 
           sessionTime,
-          sessionIndex + 1,
         ));
         
         if (i < rowSessions.length - 1) {
@@ -618,7 +617,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     );
   }
 
-  Widget _buildInstantSessionIconWithTime(bool completed, bool missed, DateTime sessionTime, int sessionNumber) {
+  Widget _buildInstantSessionIconWithTime(bool completed, bool missed, DateTime sessionTime) {
     IconData icon;
     Color iconColor;
     
@@ -654,96 +653,76 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   }
 
   bool _isSessionMissed(int sessionIndex, DateTime sessionTime) {
-    final now = DateTime.now();
     final instantSessions = _dayProgress!.dayPlan.instantSessionTimestamps;
-    final completedInstantSessions = _dayProgress!.completedInstantSessions;
     
     // User never misses morning session or last instant session
-    if (sessionIndex == instantSessions.length - 1) {
+    if (sessionIndex == instantSessions.length) {
       return false;
     }
     
-    // Check if this session is missed
-    final isCompleted = completedInstantSessions.any((s) => s.number == sessionIndex + 1);
+    // Check if this session is completed
+    final isCompleted = _dayProgress!.isInstantSessionComplete(sessionIndex);
     if (isCompleted) {
       return false;
     }
     
-    // Check if next session time has passed
-    if (sessionIndex + 1 < instantSessions.length) {
-      final nextSessionTime = instantSessions[sessionIndex + 1];
-      if (now.isAfter(nextSessionTime)) {
-        return true;
-      }
+    // Get current session that should be active
+    final currentSessionNumber = _dayProgress!.getCurrentInstantSession();
+    
+    // If current session is ahead of this session, this session is missed
+    if (currentSessionNumber != null && currentSessionNumber > sessionIndex) {
+      return true;
     }
     
     return false;
   }
 
   Map<String, String> _getSessionButtonInfo() {
-    final now = DateTime.now();
     final morningCompleted = _dayProgress!.morningSession.completed;
     final instantSessions = _dayProgress!.dayPlan.instantSessionTimestamps;
-    final completedInstantSessions = _dayProgress!.completedInstantSessions;
     final morningTime = _dayProgress!.dayPlan.morningSessionTimestamp;
-    
-    String buttonText;
-    String statusMessage;
     
     // If morning session not completed
     if (!morningCompleted) {
-      buttonText = 'Start Morning Session';
-      statusMessage = 'Complete your morning session to unlock instant sessions';
-      return {'buttonText': buttonText, 'statusMessage': statusMessage};
+      return {
+        'buttonText': 'Start Morning Session',
+        'statusMessage': 'Complete your morning session to unlock instant sessions'
+      };
     }
     
-    // Find the current instant session that should be completed
-    DateTime? nextSessionTime;
+    // Get current instant session that should be active
+    final currentSessionNumber = _dayProgress!.getCurrentInstantSession();
     
-    for (int i = 0; i < instantSessions.length; i++) {
-      final sessionTime = instantSessions[i];
-      final isCompleted = completedInstantSessions.any((s) => s.number == i + 1);
-      
-      if (!isCompleted) {
-        if (now.isAfter(sessionTime)) {
-          // This session should have been completed
-          buttonText = 'Start Instant Session';
-          
-          // Check if this is the last session
-          if (i == instantSessions.length - 1) {
-            statusMessage = 'Pass the last instant session';
-          } else {
-            final nextTime = instantSessions[i + 1];
-            statusMessage = 'Next session at ${_formatTime(nextTime)}';
-          }
-          return {'buttonText': buttonText, 'statusMessage': statusMessage};
-        } else {
-          nextSessionTime = sessionTime;
-          break;
-        }
-      }
+    if (currentSessionNumber != null && !_dayProgress!.isInstantSessionComplete(currentSessionNumber)) {
+        return {
+          'buttonText': 'Start Instant Session',
+          'statusMessage': 'Pass the instant session'
+        };
     }
     
-    // All sessions completed
-    if (completedInstantSessions.length == instantSessions.length) {
-      buttonText = 'Practice Mode';
-      final tomorrowMorning = morningTime.add(const Duration(days: 1));
+    // Practice mode - either no current session or current session is completed
+    final tomorrowMorning = morningTime.add(const Duration(days: 1));
+    String statusMessage;
+    if (_dayProgress!.completedInstantSessions.length == instantSessions.length) {
       statusMessage = 'All complete today! Next morning session at ${_formatTime(tomorrowMorning)}';
-      return {'buttonText': buttonText, 'statusMessage': statusMessage};
-    }
-    
-    // Between sessions or before first instant session
-    buttonText = 'Practice Mode';
-    if (nextSessionTime != null) {
-      statusMessage = 'Next session at ${_formatTime(nextSessionTime)}';
-    } else if (instantSessions.isEmpty) {
-      final tomorrowMorning = morningTime.add(const Duration(days: 1));
-      statusMessage = 'Next session at ${_formatTime(tomorrowMorning)}';
     } else {
-      statusMessage = 'Next session at ${_formatTime(instantSessions.first)}';
+      DateTime nextSessionTime;
+      
+      // Practice mode - find next upcoming session
+      final isLastSession = currentSessionNumber != null && currentSessionNumber == instantSessions.length;
+      
+      if (isLastSession || instantSessions.isEmpty) {
+        nextSessionTime = tomorrowMorning;
+      } else {
+        nextSessionTime = instantSessions[currentSessionNumber ?? 0];
+      }
+
+      statusMessage = 'Next session at ${_formatTime(nextSessionTime)}';
     }
-    
-    return {'buttonText': buttonText, 'statusMessage': statusMessage};
+    return {
+      'buttonText': 'Practice Mode',
+      'statusMessage': statusMessage
+    };
   }
 
   String _formatTime(DateTime time) {

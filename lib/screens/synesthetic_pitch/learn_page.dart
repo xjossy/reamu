@@ -125,7 +125,7 @@ class _LearnPageState extends State<LearnPage> {
                     ),
                   ),
                   child: const Text(
-                    'Back to Menu',
+                    'Continue',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

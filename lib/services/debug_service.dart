@@ -117,11 +117,9 @@ class DebugService {
     if (!DebugConfig.enableDebugActions) return;
 
     try {
-      // Reset user progress
-      await _memoryService.resetUserProgress();
-      
-      // Clear sessions (we'd need to add this method to SessionService)
-      Log.i('All user data reset', tag: 'Debug');
+      // Use the memory service reset functionality
+      await _memoryService.resetAllUserData();
+      Log.i('All user data reset via debug service', tag: 'Debug');
     } catch (e, stackTrace) {
       Log.e('Error resetting data', error: e, stackTrace: stackTrace, tag: 'Debug');
     }

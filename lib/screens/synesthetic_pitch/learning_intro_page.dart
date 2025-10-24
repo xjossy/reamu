@@ -92,7 +92,7 @@ class LearningIntroPage extends StatelessWidget {
               // Proceed Button
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pushReplacement(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => DescribingPage(selectedNote: noteName),
@@ -113,22 +113,6 @@ class LearningIntroPage extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Back Button
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text(
-                  'Back to Menu',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black54,
                   ),
                 ),
               ),

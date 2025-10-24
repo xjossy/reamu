@@ -124,7 +124,7 @@ class GlobalMemoryService {
       progress['synestetic_pitch']['note_scores'] = <String, dynamic>{};
     }
     
-    final noteScores = progress['synestetic_pitch']['note_scores'] as Map<String, dynamic>;
+    final noteScores = Map<String, dynamic>.from(progress['synestetic_pitch']['note_scores'] as Map);
     
     // Initialize score if not exists
     if (!noteScores.containsKey(noteName)) {
@@ -158,7 +158,7 @@ class GlobalMemoryService {
       return 0;
     }
     
-    final noteScores = progress['synestetic_pitch']['note_scores'] as Map<String, dynamic>;
+    final noteScores = Map<String, dynamic>.from(progress['synestetic_pitch']['note_scores'] as Map);
     return noteScores[noteName] as int? ?? 0;
   }
 
@@ -187,7 +187,7 @@ class GlobalMemoryService {
       return {};
     }
     
-    final noteScores = progress['synestetic_pitch']['note_scores'] as Map<String, dynamic>;
+    final noteScores = Map<String, dynamic>.from(progress['synestetic_pitch']['note_scores'] as Map);
     return noteScores.map((key, value) => MapEntry(key, value as int));
   }
 
@@ -198,7 +198,7 @@ class GlobalMemoryService {
     Log.d('Raw JSON: ${jsonEncode(progress)}', tag: 'Memory');
     Log.d('Synesthetic Pitch: ${progress['synestetic_pitch']}', tag: 'Memory');
     if (progress['synestetic_pitch'] != null) {
-      final sp = progress['synestetic_pitch'] as Map<String, dynamic>;
+      final sp = Map<String, dynamic>.from(progress['synestetic_pitch'] as Map);
       Log.d('Started: ${sp['started']}', tag: 'Memory');
       Log.d('Opened Notes: ${sp['opened_notes']}', tag: 'Memory');
       Log.d('Learned Notes: ${sp['leaned_notes']}', tag: 'Memory');
@@ -284,7 +284,9 @@ class GlobalMemoryService {
   Future<bool> ensureDayProgressIsValid() async {
     try {
       final progress = await getUserProgress();
-      final synestheticPitch = progress['synestetic_pitch'] as Map<String, dynamic>?;
+      final synestheticPitch = progress['synestetic_pitch'] != null 
+          ? Map<String, dynamic>.from(progress['synestetic_pitch'] as Map)
+          : null;
       
       if (synestheticPitch == null) {
         Log.d('No synesthetic_pitch data, skipping day_progress', tag: 'Memory');
@@ -293,7 +295,9 @@ class GlobalMemoryService {
 
       // Check if user has completed learning and personalization
       final learnedNotes = List<String>.from(synestheticPitch['leaned_notes'] ?? []);
-      final personalizationData = synestheticPitch['personalization'] as Map<String, dynamic>?;
+      final personalizationData = synestheticPitch['personalization'] != null
+          ? Map<String, dynamic>.from(synestheticPitch['personalization'] as Map)
+          : null;
       
       if (personalizationData == null) {
         Log.d('Personalization not completed, skipping day_progress', tag: 'Memory');
@@ -316,7 +320,9 @@ class GlobalMemoryService {
       }
 
       // Check if day_progress exists
-      final existingDayProgress = synestheticPitch['day_progress'] as Map<String, dynamic>?;
+      final existingDayProgress = synestheticPitch['day_progress'] != null
+          ? Map<String, dynamic>.from(synestheticPitch['day_progress'] as Map)
+          : null;
       
       // Case 1: No previous day_progress
       if (existingDayProgress == null) {
@@ -359,7 +365,7 @@ class GlobalMemoryService {
       now
     );
 
-    final morningSession = morningSessionTimestamp.isAfter(now) ? MorningSession(
+    final morningSession = morningSessionTimestamp.isBefore(now) ? MorningSession(
       completed: true,
       completionTimestamp: now,
     ) : MorningSession(completed: false);
@@ -412,7 +418,9 @@ class GlobalMemoryService {
     try {
       await ensureDayProgressIsValid();
       final progress = await getUserProgress();
-      final dayProgressData = progress['synestetic_pitch']?['day_progress'] as Map<String, dynamic>?;
+      final dayProgressData = progress['synestetic_pitch']?['day_progress'] != null
+          ? Map<String, dynamic>.from(progress['synestetic_pitch']!['day_progress'] as Map)
+          : null;
       
       if (dayProgressData == null) {
         return null;
@@ -422,6 +430,68 @@ class GlobalMemoryService {
     } catch (e, stackTrace) {
       Log.e('Error getting day progress', error: e, stackTrace: stackTrace, tag: 'Memory');
       return null;
+    }
+  }
+
+  /// Reset all user progress and data
+  Future<void> resetAllUserData() async {
+    try {
+      Log.i('Starting complete user data reset', tag: 'Memory');
+      
+      // Reset user progress (this already clears level, scores, day progress, personalization)
+      await resetUserProgress();
+      
+      // Clear session data
+      await _clearSessionData();
+      
+      // Clear any other user data files
+      await _clearUserDataFiles();
+      
+      Log.i('All user data has been successfully reset', tag: 'Memory');
+    } catch (e, stackTrace) {
+      Log.e('Error resetting all user data', error: e, stackTrace: stackTrace, tag: 'Memory');
+      rethrow;
+    }
+  }
+
+  /// Clear session data files
+  Future<void> _clearSessionData() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final sessionsFile = File('${directory.path}/synesthetic_sessions.json');
+      
+      if (await sessionsFile.exists()) {
+        await sessionsFile.delete();
+        Log.i('Session data cleared', tag: 'Memory');
+      }
+    } catch (e, stackTrace) {
+      Log.e('Error clearing session data', error: e, stackTrace: stackTrace, tag: 'Memory');
+      // Don't rethrow here as this is not critical
+    }
+  }
+
+  /// Clear user data files
+  Future<void> _clearUserDataFiles() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      
+      // List of user data files to clear
+      final userDataFiles = [
+        'user_progress.json',
+        'synesthetic_sessions.json',
+        'debug_export.json', // Debug export file if it exists
+      ];
+      
+      for (final fileName in userDataFiles) {
+        final file = File('${directory.path}/$fileName');
+        if (await file.exists()) {
+          await file.delete();
+          Log.i('Deleted user data file: $fileName', tag: 'Memory');
+        }
+      }
+    } catch (e, stackTrace) {
+      Log.e('Error clearing user data files', error: e, stackTrace: stackTrace, tag: 'Memory');
+      // Don't rethrow here as this is not critical
     }
   }
 }

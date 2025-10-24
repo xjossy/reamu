@@ -3,6 +3,7 @@ import '../../widgets/menu_tile.dart';
 import '../absolute_pitch/absolute_pitch_page.dart';
 import '../simple_playing/simple_playing_page.dart';
 import '../synesthetic_pitch/synesthetic_menu_page.dart';
+import 'settings_page.dart';
 
 class MainMenuPage extends StatelessWidget {
   const MainMenuPage({super.key});
@@ -23,6 +24,19 @@ class MainMenuPage extends StatelessWidget {
         backgroundColor: Colors.blue[800],
         elevation: 0,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsPage(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),

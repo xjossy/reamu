@@ -37,6 +37,7 @@ dependencies:
   flutter_midi_pro: ^3.1.4
   yaml: ^3.1.2
   path_provider: ^2.1.4
+  synchronized: ^3.1.0
 
 dev_dependencies:
   flutter_test:

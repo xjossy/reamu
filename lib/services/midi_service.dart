@@ -1,6 +1,7 @@
 import 'logging_service.dart';
 import 'dart:async';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
+import 'package:synchronized/synchronized.dart';
 import '../core/constants/app_constants.dart';
 
 /// Represents a playing note with automatic cleanup
@@ -9,25 +10,31 @@ class PlayingNote {
   final MidiService _service;
   Timer? _timeoutTimer;
   bool _isStopped = false;
+  final Lock _stopLock = Lock();
 
   PlayingNote(this.midiNote, this._service);
 
   /// Stop the note manually
   void stop() {
-    if (_isStopped) return;
-    _isStopped = true;
-    _timeoutTimer?.cancel();
-    _service._stopNoteInternal(midiNote);
+    bool shouldStop = false;
+    _stopLock.synchronized(() {
+      if (_isStopped) return;
+      _isStopped = true;
+      shouldStop = true;
+    });
+
+    if (shouldStop) {
+      _timeoutTimer?.cancel();
+      _service._stopNoteInternal(midiNote);
+    }
   }
 
   /// Set a timeout for automatic stop
   void setTimeout(Duration duration) {
     _timeoutTimer?.cancel();
     _timeoutTimer = Timer(duration, () {
-      if (!_isStopped) {
-        Log.w('⏰ Note $midiNote timed out, auto-stopping', tag: 'MIDI');
-        stop();
-      }
+      Log.w('⏰ Note $midiNote timed out, auto-stopping', tag: 'MIDI');
+      stop();
     });
   }
 }
@@ -43,6 +50,10 @@ class MidiService {
 
   // Track all currently playing notes
   final Map<int, PlayingNote> _activeNotes = {};
+  
+  // Mutex locks for thread safety
+  final Lock _midiLock = Lock();
+  final Lock _activeNotesLock = Lock();
 
   // Default timeout for background notes (safety measure)
   static const Duration defaultTimeout = Duration(seconds: 10);
@@ -52,24 +63,26 @@ class MidiService {
 
   // Initialize and load soundfont
   Future<bool> initialize() async {
-    if (_isInitialized) return true;
+    return await _midiLock.synchronized(() async {
+      if (_isInitialized) return true;
 
-    try {
-      final sfId = await _midiPro.loadSoundfont(
-        path: AppConstants.soundfontPath,
-        bank: AppConstants.defaultBank,
-        program: AppConstants.acousticGrandPiano,
-      );
+      try {
+        final sfId = await _midiPro.loadSoundfont(
+          path: AppConstants.soundfontPath,
+          bank: AppConstants.defaultBank,
+          program: AppConstants.acousticGrandPiano,
+        );
 
-      _soundfontId = sfId;
-      _isInitialized = true;
-      
-      Log.i('✅ MIDI Service initialized with SF ID: $sfId', tag: 'MIDI');
-      return true;
-    } catch (e, stackTrace) {
-      Log.e('❌ Error initializing MIDI', error: e, stackTrace: stackTrace, tag: 'MIDI');
-      return false;
-    }
+        _soundfontId = sfId;
+        _isInitialized = true;
+        
+        Log.i('✅ MIDI Service initialized with SF ID: $sfId', tag: 'MIDI');
+        return true;
+      } catch (e, stackTrace) {
+        Log.e('❌ Error initializing MIDI', error: e, stackTrace: stackTrace, tag: 'MIDI');
+        return false;
+      }
+    });
   }
 
   /// Play a note and return a PlayingNote handle for manual control
@@ -85,15 +98,22 @@ class MidiService {
 
     Log.d('🎹 Playing note (manual): $midiNote, sfId: $_soundfontId', tag: 'MIDI');
 
-    _midiPro.playNote(
-      sfId: _soundfontId!,
-      channel: 0,
-      key: midiNote,
-      velocity: velocity,
-    );
+    // Synchronize MIDI operations
+    _midiLock.synchronized(() {
+      _midiPro.playNote(
+        sfId: _soundfontId!,
+        channel: 0,
+        key: midiNote,
+        velocity: velocity,
+      );
+    });
 
     final playingNote = PlayingNote(midiNote, this);
-    _activeNotes[midiNote] = playingNote;
+    
+    // Synchronize active notes map access
+    _activeNotesLock.synchronized(() {
+      _activeNotes[midiNote] = playingNote;
+    });
 
     return playingNote;
   }
@@ -121,23 +141,32 @@ class MidiService {
 
     Log.d('🎹 Stopping note: $midiNote, sfId: $_soundfontId', tag: 'MIDI');
 
-    _midiPro.stopNote(
-      sfId: _soundfontId!,
-      channel: 0,
-      key: midiNote,
-    );
+    // Synchronize MIDI operations
+    _midiLock.synchronized(() {
+      _midiPro.stopNote(
+        sfId: _soundfontId!,
+        channel: 0,
+        key: midiNote,
+      );
+    });
 
-    _activeNotes.remove(midiNote);
+    // Synchronize active notes map access
+    _activeNotesLock.synchronized(() {
+      _activeNotes.remove(midiNote);
+    });
   }
 
   /// Stop a specific note
   void stopNote(int midiNote) {
-    final playingNote = _activeNotes[midiNote];
+    PlayingNote? playingNote;
+    
+    // Synchronize access to active notes map
+    _activeNotesLock.synchronized(() {
+      playingNote = _activeNotes[midiNote];
+    });
+    
     if (playingNote != null) {
-      playingNote.stop();
-    } else {
-      // Note not tracked, but try to stop it anyway
-      _stopNoteInternal(midiNote);
+      playingNote!.stop();
     }
   }
 
@@ -145,15 +174,28 @@ class MidiService {
   void stopAllNotes() {
     if (!_isInitialized || _soundfontId == null) return;
     
-    Log.i('🛑 Stopping all notes (${_activeNotes.length} active)', tag: 'MIDI');
+    List<PlayingNote> notesToStop = [];
+    
+    // Synchronize access to active notes map
+    _activeNotesLock.synchronized(() {
+      Log.i('🛑 Stopping all notes (${_activeNotes.length} active)', tag: 'MIDI');
+      notesToStop = [..._activeNotes.values];
+      _activeNotes.clear();
+    });
 
-    _activeNotes.values.forEach((note) => note.stop());
-    _activeNotes.clear();
+    notesToStop.forEach((note) => note.stop());
   }
 
   /// Get list of currently playing notes (for debugging)
   List<int> getActiveNotes() {
-    return List<int>.from(_activeNotes.keys);
+    List<int> activeNotes = [];
+    
+    // Synchronize access to active notes map
+    _activeNotesLock.synchronized(() {
+      activeNotes = List<int>.from(_activeNotes.keys);
+    });
+    
+    return activeNotes;
   }
 
   /// Dispose and cleanup

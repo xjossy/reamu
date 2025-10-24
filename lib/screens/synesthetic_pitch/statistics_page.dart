@@ -248,7 +248,7 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
                   ),
                 ),
                 child: const Text(
-                  'Back to Menu',
+                  'Continue',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
