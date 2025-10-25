@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/settings_service.dart';
 import '../../services/logging_service.dart';
-import '../../models/personalization_settings.dart';
+import '../../models/user_progress_data.dart';
+import 'synesthetic_menu_page.dart';
 import 'learning_flow.dart';
 import 'personalization_wizard_page.dart';
-import 'synesthetic_menu_page.dart';
 
 /// Manages the synesthetic pitch flow: checks state and shows appropriate page
 /// 
@@ -22,10 +22,10 @@ class SynestheticFlow {
     final settings = await _settingsService.getSettings();
     
     while (context.mounted) {
-      final userProgress = await _memoryService.getUserProgress();
+      final progress = await _memoryService.ensureData();
       
       // Step 1: Check if user needs to learn notes
-      final nextNote = _getNextNoteToLearn(userProgress, settings);
+      final nextNote = _getNextNoteToLearn(progress, settings);
       if (nextNote != null) {
         Log.i('📚 User needs to learn note: $nextNote');
         final completed = await LearningFlow.runLearning(context, nextNote);
@@ -38,7 +38,7 @@ class SynestheticFlow {
       }
       
       // Step 2: Check if user needs to complete personalization
-      final needsPersonalization = _needsPersonalization(userProgress);
+      final needsPersonalization = _needsPersonalization(progress);
       if (needsPersonalization) {
         Log.i('⚙️ User needs to complete personalization');
         final completed = await Navigator.push<bool>(
@@ -72,13 +72,11 @@ class SynestheticFlow {
   }
   
   /// Gets the next note that user needs to learn
-  static String? _getNextNoteToLearn(Map<String, dynamic> userProgress, Map<String, dynamic> settings) {
+  static String? _getNextNoteToLearn(UserProgressData userProgress, Map<String, dynamic> settings) {
     final synestheticSettings = Map<String, dynamic>.from(settings['synestetic_pitch'] as Map);
     final startWithNotes = synestheticSettings['start_with_notes'] as int;
     
-    final learnedNotes = List<String>.from(
-      userProgress['synestetic_pitch']?['leaned_notes'] ?? []
-    );
+    final learnedNotes = userProgress.synestheticPitch.learnedNotes;
     
     // Check if user needs to learn more notes
     if (learnedNotes.length >= startWithNotes) {
@@ -100,12 +98,8 @@ class SynestheticFlow {
   }
   
   /// Checks if user needs to complete personalization
-  static bool _needsPersonalization(Map<String, dynamic> userProgress) {
-    final personalizationData = userProgress['synestetic_pitch']?['personalization'] as Map<String, dynamic>?;
-    final personalization = personalizationData != null 
-        ? PersonalizationSettings.fromJson(personalizationData)
-        : null;
-    
+  static bool _needsPersonalization(UserProgressData userProgress) {
+    final personalization = userProgress.synestheticPitch.personalization;
     return personalization == null || !personalization.isCompleted;
   }
 }

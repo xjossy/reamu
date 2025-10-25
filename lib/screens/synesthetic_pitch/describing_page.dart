@@ -242,13 +242,14 @@ class _DescribingPageState extends State<DescribingPage> {
                       // Options
                       Expanded(
                         child: ListView.builder(
+                          shrinkWrap: true,
                           itemCount: currentQuestion.options.length,
                           itemBuilder: (context, index) {
                             final option = currentQuestion.options[index];
                             final isSelected = _selectedOption == option;
                             
                             return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
+                              margin: const EdgeInsets.only(bottom: 2),
                               child: RadioListTile<String>(
                                 value: option,
                                 groupValue: _selectedOption,
@@ -264,7 +265,7 @@ class _DescribingPageState extends State<DescribingPage> {
                                 activeColor: Colors.blue[700],
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 16,
-                                  vertical: 8,
+                                  vertical: 2,
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),

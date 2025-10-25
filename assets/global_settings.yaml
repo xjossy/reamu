@@ -9,9 +9,17 @@ synestetic_pitch:
   maximum_instant_sessions: 15
   morning_session_scores: 10
   morning_session_penalty: 5
-  instant_session_scores: 20
-  instant_session_penalty: 5
-  practice_score: 3
-  practice_penalty: 1
-  practice_gap_minutes: 10
-  time_to_pass_instant_session_min: 90
+  morning_session_settings:
+    scores: 10
+    penalty: 5
+    notes: 6
+  instant_session_settings:
+    scores: 20
+    penalty: 5
+    max_inactivity_minutes: 15
+    notes: 2
+  practice_session_settings:
+    scores: 3
+    penalty: 1
+    reset_after_minutes: 10
+    scored_notes: 1

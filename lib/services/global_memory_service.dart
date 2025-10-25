@@ -1,18 +1,25 @@
+import 'dart:math';
 import 'package:reamu/services/global_config_service.dart';
 
 import 'logging_service.dart';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:math';
-import 'package:path_provider/path_provider.dart';
 import 'settings_service.dart';
+import 'storage_manager.dart';
 import '../models/day_progress.dart';
 import '../models/personalization_settings.dart';
+import '../models/active_session.dart';
+import '../models/session_settings.dart';
+import '../models/user_progress_data.dart';
 
 class GlobalMemoryService {
   static const String _fileName = 'user_progress.json';
   static GlobalMemoryService? _instance;
+  
+  final StorageManager _storageManager = StorageManager(fileName: _fileName);
   final GlobalConfigService _configService = GlobalConfigService.instance;
+  final SettingsService _settingsService = SettingsService.instance;
+  
+  // Cached data in memory
+  UserProgressData? _data;
   
   GlobalMemoryService._();
   
@@ -21,395 +28,233 @@ class GlobalMemoryService {
     return _instance!;
   }
   
-  final SettingsService _settingsService = SettingsService.instance;
+  /// Ensure data is loaded in memory, loading only once
+  Future<UserProgressData> ensureData() async {
+    if (_data != null) {
+      return _data!;
+    }
 
-  Future<Map<String, dynamic>> getUserProgress() async {
     try {
-      final file = await _getFile();
-      if (await file.exists()) {
-        final jsonString = await file.readAsString();
-        return jsonDecode(jsonString);
-      }
+      final json = await _storageManager.loadData();
+      _data = UserProgressData.fromJson(json);
+      Log.i('User progress data loaded', tag: 'Memory');
     } catch (e, stackTrace) {
-      Log.e('Error reading user progress', error: e, stackTrace: stackTrace, tag: 'Memory');
+      Log.e('Error loading user progress, using defaults', error: e, stackTrace: stackTrace, tag: 'Memory');
+      _data = _createDefaultData();
     }
-    
-    // Return default progress if file doesn't exist or error
-    return _getDefaultProgress();
+
+    return _data!;
   }
 
-  Future<void> saveUserProgress(Map<String, dynamic> progress) async {
-    try {
-      final file = await _getFile();
-      await file.writeAsString(jsonEncode(progress), flush: true);
-    } catch (e, stackTrace) {
-      Log.e('Error saving user progress', error: e, stackTrace: stackTrace, tag: 'Memory');
-    }
+  /// Save data to storage (async, no need to await)
+  void _saveData() {
+    if (_data == null) return;
+    _storageManager.saveData(_data!.toJson());
   }
 
-  void _updateNoteStatisticsImpl(ConfigValue config, Map<String, dynamic> progress, String noteName, String questionKey, String answer) {
-    final noteStatistics = progress['synestetic_pitch']['note_statistics'];
-    
-    // Initialize note statistics if not exists
-    if (!noteStatistics.containsKey(noteName)) {
-      noteStatistics[noteName] = {
-        'questions': {}
-      };
-    }
-
-    final questions = noteStatistics[noteName]['questions'];
-    final question = config.getQuestion(questionKey)!;
-    
-    // Initialize question if not exists
-    if (!questions.containsKey(questionKey)) {
-      questions[questionKey] = List.filled(question.options.length, 0);
-    }
-    
-    // Find answer index and increment
-    final answerIndex = question.options.indexOf(answer);
-    if (answerIndex >= 0) {
-      if (answerIndex >= questions[questionKey].length) {
-        final missingCount = (answerIndex - questions[questionKey].length + 1).toInt();
-        questions[questionKey].addAll(List.filled(missingCount, 0));
-      }
-      questions[questionKey][answerIndex]++;
-    }
+  /// Create default user progress data
+  UserProgressData _createDefaultData() {
+    return UserProgressData(
+      synestheticPitch: SynestheticPitchData(
+        started: false,
+        openedNotes: [],
+        learnedNotes: [],
+        noteStatistics: {},
+        level: 1,
+        noteScores: {},
+        personalization: null,
+        dayProgress: null,
+      ),
+    );
   }
 
-  Future<void> updateNotesStatistics(String noteName, Map<String, dynamic> answers) async {
-    final progress = await getUserProgress();
-    final config = await _configService.value();
-    
-    for (final answer in answers.entries) {
-      _updateNoteStatisticsImpl(config, progress, noteName, answer.key, answer.value);
-    }
-
-    await saveUserProgress(progress);
-  }
-
-  Future<void> updateNoteStatistics(String noteName, String questionKey, String answer) async {
-    final progress = await getUserProgress();
-
-    final config = await _configService.value();
-    _updateNoteStatisticsImpl(config, progress, noteName, questionKey, answer);
-    
-    await saveUserProgress(progress);
-  }
+  // ==================== NOTE MANAGEMENT ====================
 
   Future<void> markNoteAsOpened(String noteName) async {
-    final progress = await getUserProgress();
-    final openedNotes = List<String>.from(progress['synestetic_pitch']['opened_notes']);
-    
-    if (!openedNotes.contains(noteName)) {
-      openedNotes.add(noteName);
-      progress['synestetic_pitch']['opened_notes'] = openedNotes;
-      await saveUserProgress(progress);
+    final data = await ensureData();
+    if (!data.synestheticPitch.openedNotes.contains(noteName)) {
+      data.synestheticPitch.openedNotes.add(noteName);
+      _saveData();
     }
   }
 
   Future<void> markNoteAsLearned(String noteName) async {
-    final progress = await getUserProgress();
-    final learnedNotes = List<String>.from(progress['synestetic_pitch']['leaned_notes']);
-    
-    if (!learnedNotes.contains(noteName)) {
-      learnedNotes.add(noteName);
-      progress['synestetic_pitch']['leaned_notes'] = learnedNotes;
-      await saveUserProgress(progress);
+    final data = await ensureData();
+    if (!data.synestheticPitch.learnedNotes.contains(noteName)) {
+      data.synestheticPitch.learnedNotes.add(noteName);
+      _saveData();
     }
   }
 
-  Map<String, dynamic> _getDefaultProgress() {
-    return {
-      'synestetic_pitch': {
-        'started': false,
-        'opened_notes': [],
-        'leaned_notes': [],
-        'note_statistics': {},
-        'level': 1,
-        'note_scores': {}
+  // ==================== NOTE STATISTICS ====================
+
+  Future<void> updateNotesStatistics(String noteName, Map<String, String> answers) async {
+    final data = await ensureData();
+    final config = await _configService.value();
+
+    // Initialize note statistics if not exists
+    if (!data.synestheticPitch.noteStatistics.containsKey(noteName)) {
+      data.synestheticPitch.noteStatistics[noteName] = NoteStatistics(questions: {});
+    }
+
+    final noteStats = data.synestheticPitch.noteStatistics[noteName]!;
+    
+    for (final answer in answers.entries) {
+      final question = config.getQuestion(answer.key);
+      if (question == null) continue;
+
+      if (!noteStats.questions.containsKey(answer.key)) {
+        noteStats.questions[answer.key] = List.filled(question.options.length, 0);
       }
-    };
+
+      final answerIndex = question.options.indexOf(answer.value);
+      if (answerIndex >= 0) {
+        if (answerIndex >= noteStats.questions[answer.key]!.length) {
+          final missingCount = answerIndex - noteStats.questions[answer.key]!.length + 1;
+          noteStats.questions[answer.key]!.addAll(List.filled(missingCount, 0));
+        }
+        noteStats.questions[answer.key]![answerIndex]++;
+      }
+    }
+
+    _saveData();
   }
+
+  Future<void> updateNoteStatistics(String noteName, String questionKey, String answer) async {
+    final data = await ensureData();
+    final config = await _configService.value();
+
+    // Initialize note statistics if not exists
+    if (!data.synestheticPitch.noteStatistics.containsKey(noteName)) {
+      data.synestheticPitch.noteStatistics[noteName] = NoteStatistics(questions: {});
+    }
+
+    final noteStats = data.synestheticPitch.noteStatistics[noteName]!;
+    final question = config.getQuestion(questionKey);
+
+    if (question == null) return;
+
+    if (!noteStats.questions.containsKey(questionKey)) {
+      noteStats.questions[questionKey] = List.filled(question.options.length, 0);
+    }
+
+    final answerIndex = question.options.indexOf(answer);
+    if (answerIndex >= 0) {
+      if (answerIndex >= noteStats.questions[questionKey]!.length) {
+        final missingCount = answerIndex - noteStats.questions[questionKey]!.length + 1;
+        noteStats.questions[questionKey]!.addAll(List.filled(missingCount, 0));
+      }
+      noteStats.questions[questionKey]![answerIndex]++;
+    }
+
+    _saveData();
+  }
+
+  // ==================== NOTE SCORES ====================
 
   Future<void> updateNoteScore(String noteName, int scoreChange) async {
-    final progress = await getUserProgress();
-    
-    // Ensure synestetic_pitch section exists
-    if (!progress.containsKey('synestetic_pitch')) {
-      progress['synestetic_pitch'] = {};
-    }
-    
-    // Ensure note_scores exists and is properly initialized
-    if (!progress['synestetic_pitch'].containsKey('note_scores') || 
-        progress['synestetic_pitch']['note_scores'] == null) {
-      progress['synestetic_pitch']['note_scores'] = <String, dynamic>{};
-    }
-    
-    final noteScores = Map<String, dynamic>.from(progress['synestetic_pitch']['note_scores'] as Map);
-    
-    // Initialize score if not exists
-    if (!noteScores.containsKey(noteName)) {
-      noteScores[noteName] = 0;
-    }
-    
-    // Get maximum score from settings
+    final data = await ensureData();
     final settings = await _settingsService.getSettings();
     final maxScore = settings['synestetic_pitch']['maximum_note_score'] as int;
     
-    // Update score and clamp between 0 and max
-    int newScore = (noteScores[noteName] as int) + scoreChange;
+    if (!data.synestheticPitch.noteScores.containsKey(noteName)) {
+      data.synestheticPitch.noteScores[noteName] = 0;
+    }
+
+    int newScore = data.synestheticPitch.noteScores[noteName]! + scoreChange;
     newScore = max(0, min(maxScore, newScore));
-    noteScores[noteName] = newScore;
+    data.synestheticPitch.noteScores[noteName] = newScore;
     
-    await saveUserProgress(progress);
-    Log.i('Updated score for $noteName: ${noteScores[noteName]} (change: $scoreChange, clamped to 0-$maxScore)', tag: 'Memory');
+    _saveData();
+    Log.i('Updated score for $noteName: ${data.synestheticPitch.noteScores[noteName]} (change: $scoreChange, clamped to 0-$maxScore)', tag: 'Memory');
   }
 
   Future<int> getNoteScore(String noteName) async {
-    final progress = await getUserProgress();
-    
-    // Ensure synestetic_pitch section exists
-    if (!progress.containsKey('synestetic_pitch')) {
-      return 0;
-    }
-    
-    // Ensure note_scores exists
-    if (!progress['synestetic_pitch'].containsKey('note_scores') || 
-        progress['synestetic_pitch']['note_scores'] == null) {
-      return 0;
-    }
-    
-    final noteScores = Map<String, dynamic>.from(progress['synestetic_pitch']['note_scores'] as Map);
-    return noteScores[noteName] as int? ?? 0;
-  }
-
-  Future<int> getCurrentLevel() async {
-    final progress = await getUserProgress();
-    
-    // Ensure synestetic_pitch section exists
-    if (!progress.containsKey('synestetic_pitch')) {
-      return 1;
-    }
-    
-    return progress['synestetic_pitch']['level'] as int? ?? 1;
+    final data = await ensureData();
+    return data.synestheticPitch.noteScores[noteName] ?? 0;
   }
 
   Future<Map<String, int>> getAllNoteScores() async {
-    final progress = await getUserProgress();
-    
-    // Ensure synestetic_pitch section exists
-    if (!progress.containsKey('synestetic_pitch')) {
-      return {};
-    }
-    
-    // Ensure note_scores exists
-    if (!progress['synestetic_pitch'].containsKey('note_scores') || 
-        progress['synestetic_pitch']['note_scores'] == null) {
-      return {};
-    }
-    
-    final noteScores = Map<String, dynamic>.from(progress['synestetic_pitch']['note_scores'] as Map);
-    return noteScores.map((key, value) => MapEntry(key, value as int));
+    final data = await ensureData();
+    return Map<String, int>.from(data.synestheticPitch.noteScores);
   }
 
-  // Debug methods
-  Future<void> printUserProgress() async {
-    final progress = await getUserProgress();
-    Log.d('=== USER PROGRESS DEBUG ===', tag: 'Memory');
-    Log.d('Raw JSON: ${jsonEncode(progress)}', tag: 'Memory');
-    Log.d('Synesthetic Pitch: ${progress['synestetic_pitch']}', tag: 'Memory');
-    if (progress['synestetic_pitch'] != null) {
-      final sp = Map<String, dynamic>.from(progress['synestetic_pitch'] as Map);
-      Log.d('Started: ${sp['started']}', tag: 'Memory');
-      Log.d('Opened Notes: ${sp['opened_notes']}', tag: 'Memory');
-      Log.d('Learned Notes: ${sp['leaned_notes']}', tag: 'Memory');
-      Log.d('Level: ${sp['level']}', tag: 'Memory');
-      Log.d('Note Scores: ${sp['note_scores']}', tag: 'Memory');
-      Log.d('Note Statistics: ${sp['note_statistics']}', tag: 'Memory');
-    }
-    Log.d('========================', tag: 'Memory');
+  // ==================== LEVEL & PROGRESS ====================
+
+  Future<int> getCurrentLevel() async {
+    final data = await ensureData();
+    return data.synestheticPitch.level;
   }
 
-  Future<void> resetUserProgress() async {
-    final defaultProgress = _getDefaultProgress();
-    await saveUserProgress(defaultProgress);
-    Log.i('User progress reset to default', tag: 'Memory');
+  // ==================== DAY PROGRESS ====================
+
+  Future<DayProgress?> getDayProgress() async {
+    await ensureDayProgressIsValid();
+    final data = await ensureData();
+    return data.synestheticPitch.dayProgress;
   }
 
-  Future<void> resetNoteScores() async {
-    final progress = await getUserProgress();
-    if (progress.containsKey('synestetic_pitch')) {
-      progress['synestetic_pitch']['note_scores'] = <String, dynamic>{};
-      await saveUserProgress(progress);
-      Log.i('Note scores reset', tag: 'Memory');
-    }
+  Future<void> saveDayProgress(DayProgress dayProgress) async {
+    final data = await ensureData();
+    data.synestheticPitch.dayProgress = dayProgress;
+    _saveData();
   }
 
-  Future<File> _getFile() async {
-    final directory = await getApplicationDocumentsDirectory();
-    return File('${directory.path}/$_fileName');
-  }
-
-  // ==================== DAY PROGRESS MANAGEMENT ====================
-
-  /// Compute the morning session timestamp based on current time and personalization
-  /// Principle: now() should be < morning_session_timestamp + daylightDurationHours - 30 minutes
-  DateTime _computeMorningSessionTimestamp(PersonalizationSettings settings) {
-    final now = DateTime.now();
-    final morningTime = settings.morningTime;
-    
-    // Try today's date first
-    DateTime candidateTimestamp = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      morningTime.hour,
-      morningTime.minute,
-    ).subtract(const Duration(days: 1));
-
-    // Calculate the deadline: morning_session_timestamp + daylightDuration - 30 minutes
-    final daylightMinutes = (settings.daylightDurationHours * 60).round();
-    final deadlineOffset = Duration(minutes: daylightMinutes - 30);
-
-    while (now.isAfter(candidateTimestamp.add(deadlineOffset))) {
-        candidateTimestamp = candidateTimestamp.add(const Duration(days: 1));
-    }
-    
-    Log.d('Computed morning session timestamp: $candidateTimestamp (now: $now)', tag: 'Memory');
-    return candidateTimestamp;
-  }
-
-  /// Compute instant session timestamps based on morning session and settings
-  /// Only includes sessions that are after current moment
-  List<DateTime> _computeInstantSessionTimestamps(
-    DateTime morningSessionTimestamp,
-    PersonalizationSettings settings,
-    DateTime now,
-  ) {
-    final sessionOffsets = settings.getInstantSessionOffsets();
-
-    List<DateTime> result = [];
-    for (final offset in sessionOffsets) {
-      final timestamp = morningSessionTimestamp.add(offset);
-      if (timestamp.isAfter(now)) {
-        result.add(timestamp);
-      }
-    }
-
-    Log.d('Computed ${result.length} instant session timestamps', tag: 'Memory');
-    return result;
-  }
-
-  /// Check if day_progress needs to be created or reset
-  /// Returns true if day_progress was created/reset
   Future<bool> ensureDayProgressIsValid() async {
-    try {
-      final progress = await getUserProgress();
-      final synestheticPitch = progress['synestetic_pitch'] != null 
-          ? Map<String, dynamic>.from(progress['synestetic_pitch'] as Map)
-          : null;
-      
-      if (synestheticPitch == null) {
-        Log.d('No synesthetic_pitch data, skipping day_progress', tag: 'Memory');
-        return false;
-      }
+    final data = await ensureData();
+    final learnedNotes = data.synestheticPitch.learnedNotes;
+    final personalization = data.synestheticPitch.personalization;
 
-      // Check if user has completed learning and personalization
-      final learnedNotes = List<String>.from(synestheticPitch['leaned_notes'] ?? []);
-      final personalizationData = synestheticPitch['personalization'] != null
-          ? Map<String, dynamic>.from(synestheticPitch['personalization'] as Map)
-          : null;
-      
-      if (personalizationData == null) {
-        Log.d('Personalization not completed, skipping day_progress', tag: 'Memory');
-        return false;
-      }
-
-      final personalization = PersonalizationSettings.fromJson(personalizationData);
-      if (!personalization.isCompleted) {
-        Log.d('Personalization not marked as completed, skipping day_progress', tag: 'Memory');
-        return false;
-      }
-
-      // Check if user has learned enough notes
-      final settings = await _settingsService.getSettings();
-      final startWithNotes = settings['synestetic_pitch']['start_with_notes'] as int;
-      
-      if (learnedNotes.length < startWithNotes) {
-        Log.d('User has not learned enough notes (${learnedNotes.length}/$startWithNotes), skipping day_progress', tag: 'Memory');
-        return false;
-      }
-
-      // Check if day_progress exists
-      final existingDayProgress = synestheticPitch['day_progress'] != null
-          ? Map<String, dynamic>.from(synestheticPitch['day_progress'] as Map)
-          : null;
-      
-      // Case 1: No previous day_progress
-      if (existingDayProgress == null) {
-        Log.i('No existing day_progress, creating initial one', tag: 'Memory');
-        await _createInitialDayProgress(progress, personalization);
-        return true;
-      }
-
-      // Case 2: Check if more than 20 hours since current day_progress.morning_session_timestamp
-      final dayProgress = DayProgress.fromJson(existingDayProgress);
-      final morningSessionTimestamp = dayProgress.dayPlan.morningSessionTimestamp;
-      final now = DateTime.now();
-      final hoursSinceMorning = now.difference(morningSessionTimestamp).inHours;
-      
-      if (hoursSinceMorning >= 20) {
-        Log.i('More than 20 hours since morning session ($hoursSinceMorning hours), creating blank day_progress', tag: 'Memory');
-        await _createBlankDayProgress(progress, personalization);
-        return true;
-      }
-
-      Log.d('Day progress is valid, no changes needed', tag: 'Memory');
-      return false;
-    } catch (e, stackTrace) {
-      Log.e('Error ensuring day_progress validity', error: e, stackTrace: stackTrace, tag: 'Memory');
+    if (personalization == null || !personalization.isCompleted) {
+      Log.d('Personalization not completed, skipping day_progress', tag: 'Memory');
       return false;
     }
+
+    final settings = await _settingsService.getSettings();
+    final startWithNotes = settings['synestetic_pitch']['start_with_notes'] as int;
+
+    if (learnedNotes.length < startWithNotes) {
+      Log.d('User has not learned enough notes (${learnedNotes.length}/$startWithNotes)', tag: 'Memory');
+      return false;
+    }
+
+    if (data.synestheticPitch.dayProgress != null) {
+      final morningSessionTimestamp = data.synestheticPitch.dayProgress!.dayPlan.morningSessionTimestamp;
+      final hoursSinceMorning = DateTime.now().difference(morningSessionTimestamp).inHours;
+
+      if (hoursSinceMorning >= 20) {
+        Log.i('More than 20 hours since morning session, creating blank day_progress', tag: 'Memory');
+        await _createBlankDayProgress(personalization);
+        return true;
+      }
+
+      return false;
+    }
+
+    Log.i('No existing day_progress, creating initial one', tag: 'Memory');
+    await _createInitialDayProgress(personalization);
+    return true;
   }
 
-  /// Create initial day_progress when user completes learning and personalization
-  /// Morning session is automatically marked as completed
-  Future<void> _createInitialDayProgress(
-    Map<String, dynamic> progress,
-    PersonalizationSettings settings,
-  ) async {
+  Future<void> _createInitialDayProgress(PersonalizationSettings settings) async {
     final now = DateTime.now();
     final morningSessionTimestamp = _computeMorningSessionTimestamp(settings);
-    final instantSessionTimestamps = _computeInstantSessionTimestamps(
-      morningSessionTimestamp,
-      settings,
-      now
-    );
-
-    final morningSession = morningSessionTimestamp.isBefore(now) ? MorningSession(
-      completed: true,
-      completionTimestamp: now,
-    ) : MorningSession(completed: false);
+    final instantSessionTimestamps = _computeInstantSessionTimestamps(morningSessionTimestamp, settings, now);
 
     final dayProgress = DayProgress(
-      morningSession: morningSession,
-      completedInstantSessions: [],
       dayPlan: DayPlan(
         morningSessionTimestamp: morningSessionTimestamp,
         instantSessionTimestamps: instantSessionTimestamps,
       ),
     );
 
-    progress['synestetic_pitch']['day_progress'] = dayProgress.toJson();
-    await saveUserProgress(progress);
-    Log.i('Created initial day_progress with morning session completed', tag: 'Memory');
+    final data = await ensureData();
+    data.synestheticPitch.dayProgress = dayProgress;
+    _saveData();
+    Log.i('Created initial day_progress', tag: 'Memory');
   }
 
-  /// Create blank day_progress (reset)
-  Future<void> _createBlankDayProgress(
-    Map<String, dynamic> progress,
-    PersonalizationSettings settings,
-  ) async {
+  Future<void> _createBlankDayProgress(PersonalizationSettings settings) async {
     final morningSessionTimestamp = _computeMorningSessionTimestamp(settings);
     final instantSessionTimestamps = _computeInstantSessionTimestamps(
       morningSessionTimestamp,
@@ -418,101 +263,186 @@ class GlobalMemoryService {
     );
 
     final dayProgress = DayProgress(
-      morningSession: MorningSession(
-        completed: false,
-        completionTimestamp: null,
-      ),
-      completedInstantSessions: [],
       dayPlan: DayPlan(
         morningSessionTimestamp: morningSessionTimestamp,
         instantSessionTimestamps: instantSessionTimestamps,
       ),
     );
 
-    progress['synestetic_pitch']['day_progress'] = dayProgress.toJson();
-    await saveUserProgress(progress);
+    final data = await ensureData();
+    data.synestheticPitch.dayProgress = dayProgress;
+    _saveData();
     Log.i('Created blank day_progress', tag: 'Memory');
   }
 
-  /// Get current day progress (if exists and valid)
-  Future<DayProgress?> getDayProgress() async {
-    try {
-      await ensureDayProgressIsValid();
-      final progress = await getUserProgress();
-      final dayProgressData = progress['synestetic_pitch']?['day_progress'] != null
-          ? Map<String, dynamic>.from(progress['synestetic_pitch']!['day_progress'] as Map)
-          : null;
-      
-      if (dayProgressData == null) {
-        return null;
+  DateTime _computeMorningSessionTimestamp(PersonalizationSettings settings) {
+    final now = DateTime.now();
+    final morningTime = settings.morningTime;
+    
+    DateTime candidateTimestamp = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      morningTime.hour,
+      morningTime.minute,
+    ).subtract(const Duration(days: 1));
+
+    final daylightMinutes = (settings.daylightDurationHours * 60).round();
+    final deadlineOffset = Duration(minutes: daylightMinutes - 30);
+
+    while (now.isAfter(candidateTimestamp.add(deadlineOffset))) {
+        candidateTimestamp = candidateTimestamp.add(const Duration(days: 1));
+    }
+    
+    return candidateTimestamp;
+  }
+
+  List<DateTime> _computeInstantSessionTimestamps(
+    DateTime morningSessionTimestamp,
+    PersonalizationSettings settings,
+    DateTime now,
+  ) {
+    final sessionOffsets = settings.getInstantSessionOffsets();
+    final result = <DateTime>[];
+
+    for (final offset in sessionOffsets) {
+      final timestamp = morningSessionTimestamp.add(offset);
+      if (timestamp.isAfter(now)) {
+        result.add(timestamp);
       }
-      
-      return DayProgress.fromJson(dayProgressData);
-    } catch (e, stackTrace) {
-      Log.e('Error getting day progress', error: e, stackTrace: stackTrace, tag: 'Memory');
-      return null;
     }
+
+    return result;
   }
 
-  /// Reset all user progress and data
-  Future<void> resetAllUserData() async {
-    try {
-      Log.i('Starting complete user data reset', tag: 'Memory');
-      
-      // Reset user progress (this already clears level, scores, day progress, personalization)
-      await resetUserProgress();
-      
-      // Clear session data
-      await _clearSessionData();
-      
-      // Clear any other user data files
-      await _clearUserDataFiles();
-      
-      Log.i('All user data has been successfully reset', tag: 'Memory');
-    } catch (e, stackTrace) {
-      Log.e('Error resetting all user data', error: e, stackTrace: stackTrace, tag: 'Memory');
-      rethrow;
-    }
-  }
+  // ==================== SESSIONS ====================
 
-  /// Clear session data files
-  Future<void> _clearSessionData() async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final sessionsFile = File('${directory.path}/synesthetic_sessions.json');
-      
-      if (await sessionsFile.exists()) {
-        await sessionsFile.delete();
-        Log.i('Session data cleared', tag: 'Memory');
-      }
-    } catch (e, stackTrace) {
-      Log.e('Error clearing session data', error: e, stackTrace: stackTrace, tag: 'Memory');
-      // Don't rethrow here as this is not critical
+  Future<ActiveSession> getOrCreateCurrentSession(SessionType? requestedType) async {
+    final dayProgress = await getDayProgress();
+    if (dayProgress == null) {
+      throw Exception('No day progress available');
     }
-  }
 
-  /// Clear user data files
-  Future<void> _clearUserDataFiles() async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      
-      // List of user data files to clear
-      final userDataFiles = [
-        'user_progress.json',
-        'synesthetic_sessions.json',
-        'debug_export.json', // Debug export file if it exists
-      ];
-      
-      for (final fileName in userDataFiles) {
-        final file = File('${directory.path}/$fileName');
-        if (await file.exists()) {
-          await file.delete();
-          Log.i('Deleted user data file: $fileName', tag: 'Memory');
+    final data = await ensureData();
+    final learnedNotes = data.synestheticPitch.learnedNotes;
+
+    if (learnedNotes.isEmpty) {
+      throw Exception('No learned notes available for session');
+    }
+
+    final settings = await _settingsService.getSettings();
+
+    // 1. Check morning session
+    if (!dayProgress.isMorningSessionCompleted()) {
+      if (dayProgress.morningSessionId != null) {
+        final existingSession = dayProgress.getSessionById(dayProgress.morningSessionId!);
+        if (existingSession != null && !existingSession.isCompleted) {
+          return existingSession;
         }
       }
-    } catch (e, stackTrace) {
-      Log.e('Error clearing user data files', error: e, stackTrace: stackTrace, tag: 'Memory');
-      // Don't rethrow here as this is not critical
+
+      return await _createSessionOfType(
+        dayProgress,
+        SessionType.morning,
+        learnedNotes,
+        settings,
+      );
     }
+
+    // 2. Check active instant session
+    if (dayProgress.activeInstantSessionId != null) {
+      final activeSession = dayProgress.getSessionById(dayProgress.activeInstantSessionId!);
+      if (activeSession != null && !activeSession.isCompleted) {
+        return activeSession;
+      }
+    }
+
+    // 3. Check for current instant session time
+    final currentInstantSessionNumber = dayProgress.getCurrentInstantSession();
+    if (currentInstantSessionNumber != null && !dayProgress.isInstantSessionComplete(currentInstantSessionNumber)) {
+      return await _createSessionOfType(
+        dayProgress,
+        SessionType.instant,
+        learnedNotes,
+        settings,
+        instantSessionNumber: currentInstantSessionNumber,
+      );
+    }
+
+    // 4. Return/create practice session
+    if (dayProgress.practiceSessionId != null) {
+      final practiceSession = dayProgress.getSessionById(dayProgress.practiceSessionId!);
+      if (practiceSession != null && !practiceSession.isCompleted) {
+        return practiceSession;
+      }
+    }
+
+    return await _createSessionOfType(
+      dayProgress,
+      SessionType.practice,
+      learnedNotes,
+      settings,
+    );
+  }
+
+  Future<ActiveSession> _createSessionOfType(
+    DayProgress dayProgress,
+    SessionType type,
+    List<String> learnedNotes,
+    Map<String, dynamic> settings,
+    {int? instantSessionNumber}
+  ) async {
+    final settingsKey = '${type.name}_session_settings';
+    final sessionSettings = SessionSettings.fromJson(
+      Map<String, dynamic>.from(settings['synestetic_pitch'][settingsKey] as Map)
+    );
+
+    return dayProgress.createAndSaveSession(
+      type,
+      sessionSettings,
+      learnedNotes,
+      instantSessionNumber: instantSessionNumber,
+    );
+  }
+
+  Future<void> completeSessionSuccessfully(ActiveSession session) async {
+    final dayProgress = await getDayProgress();
+    if (dayProgress == null) {
+      return;
+    }
+    
+    if (session.type == SessionType.morning) {
+      dayProgress.morningSessionId = session.id;
+    } else if (session.type == SessionType.instant) {
+      final currentSessionNumber = dayProgress.getCurrentInstantSession() ?? 1;
+      if (!dayProgress.completedInstantSessionNumbers.contains(currentSessionNumber)) {
+        dayProgress.completedInstantSessionNumbers.add(currentSessionNumber);
+      }
+      dayProgress.activeInstantSessionId = null;
+    }
+
+    await saveDayProgress(dayProgress);
+  }
+
+  // ==================== PERSONALIZATION ====================
+
+  Future<void> savePersonalization(PersonalizationSettings settings) async {
+    final data = await ensureData();
+    data.synestheticPitch.personalization = settings;
+    data.synestheticPitch.started = true;
+    _saveData();
+  }
+
+  // ==================== DEBUG & RESET ====================
+
+  Future<void> resetUserProgress() async {
+    _data = _createDefaultData();
+    _saveData();
+    Log.i('User progress reset to default', tag: 'Memory');
+  }
+
+  Future<void> resetAllUserData() async {
+    await resetUserProgress();
+    Log.i('All user data has been successfully reset', tag: 'Memory');
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../models/note.dart';
+import '../../models/user_progress_data.dart';
 import 'statistics_page.dart';
 import 'comparative_stats_page.dart';
 import '../../mixins/midi_cleanup_mixin.dart';
@@ -24,7 +25,7 @@ class GuessNoteSelectionPage extends StatefulWidget {
 
 class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with MidiCleanupMixin {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  Map<String, dynamic> _userProgress = {};
+  UserProgressData? _userProgress;
   bool _isLoading = true;
 
   @override
@@ -34,7 +35,7 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
   }
 
   Future<void> _loadData() async {
-    final progress = await _memoryService.getUserProgress();
+    final progress = await _memoryService.ensureData();
     
     setState(() {
       _userProgress = progress;
@@ -57,7 +58,7 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
   }
 
   bool _isNoteLearned(String noteName) {
-    final learnedNotes = List<String>.from(_userProgress['synestetic_pitch']['leaned_notes']);
+    final learnedNotes = _userProgress?.synestheticPitch.learnedNotes ?? [];
     return learnedNotes.contains(noteName);
   }
 
@@ -171,6 +172,7 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
             // Instruction
             Card(
               elevation: 2,
+              color: Colors.blue[50],
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -178,14 +180,14 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.purple[700], size: 28),
+                    Icon(Icons.info_outline, color: Colors.blue[600], size: 28),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Select the note you think was played. Only learned notes are active.',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey[700],
+                          color: Colors.blue[900],
                         ),
                       ),
                     ),

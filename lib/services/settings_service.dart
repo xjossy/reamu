@@ -1,6 +1,7 @@
 import 'logging_service.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
+import '../models/session_settings.dart';
 
 class SettingsService {
   static SettingsService? _instance;
@@ -27,34 +28,6 @@ class SettingsService {
     }
   }
 
-  Future<List<String>> getSynestheticNoteSequence() async {
-    final settings = await getSettings();
-    final noteSequence = settings['synestetic_pitch']?['note_sequence'] as List?;
-    return noteSequence?.map((note) => note.toString()).toList() ?? [];
-  }
-
-  Future<int> getCurrentNoteIndex(Map<String, dynamic> userProgress) async {
-    final noteSequence = await getSynestheticNoteSequence();
-    final openedNotes = List<String>.from(userProgress['synestetic_pitch']['opened_notes']);
-    return openedNotes.length;
-  }
-
-  Future<String?> getCurrentNote(Map<String, dynamic> userProgress) async {
-    final noteSequence = await getSynestheticNoteSequence();
-    final currentIndex = await getCurrentNoteIndex(userProgress);
-    
-    if (currentIndex < noteSequence.length) {
-      return noteSequence[currentIndex];
-    }
-    return null;
-  }
-
-  Future<bool> hasMoreNotes(Map<String, dynamic> userProgress) async {
-    final noteSequence = await getSynestheticNoteSequence();
-    final currentIndex = await getCurrentNoteIndex(userProgress);
-    return currentIndex < noteSequence.length;
-  }
-
   Future<int> getGuessQuestionsCount() async {
     final settings = await getSettings();
     final count = settings['synestetic_pitch']?['guess_questions'] as int?;
@@ -65,5 +38,58 @@ class SettingsService {
     final settings = await getSettings();
     final minutes = settings['synestetic_pitch']?['session_length_minutes'] as int?;
     return minutes ?? 20; // Default to 20 minutes if not specified
+  }
+
+  /// Get morning session settings
+  Future<SessionSettings> getMorningSessionSettings() async {
+    final settings = await getSettings();
+    final sessionSettings = settings['synestetic_pitch']?['morning_session_settings'] as Map?;
+    
+    if (sessionSettings != null) {
+      return SessionSettings.fromJson(Map<String, dynamic>.from(sessionSettings));
+    }
+    
+    // Fallback to default
+    return SessionSettings(
+      scores: 10,
+      penalty: 5,
+      notes: 6,
+    );
+  }
+
+  /// Get instant session settings
+  Future<SessionSettings> getInstantSessionSettings() async {
+    final settings = await getSettings();
+    final sessionSettings = settings['synestetic_pitch']?['instant_session_settings'] as Map?;
+    
+    if (sessionSettings != null) {
+      return SessionSettings.fromJson(Map<String, dynamic>.from(sessionSettings));
+    }
+    
+    // Fallback to default
+    return SessionSettings(
+      scores: 20,
+      penalty: 5,
+      maxInactivityMinutes: 15,
+      notes: 2,
+    );
+  }
+
+  /// Get practice session settings
+  Future<SessionSettings> getPracticeSessionSettings() async {
+    final settings = await getSettings();
+    final sessionSettings = settings['synestetic_pitch']?['practice_session_settings'] as Map?;
+    
+    if (sessionSettings != null) {
+      return SessionSettings.fromJson(Map<String, dynamic>.from(sessionSettings));
+    }
+    
+    // Fallback to default
+    return SessionSettings(
+      scores: 3,
+      penalty: 1,
+      lifetimeMinutes: 10,
+      scoredNotes: 1,
+    );
   }
 }

@@ -5,6 +5,9 @@ import 'statistics_page.dart';
 import 'learning_flow.dart';
 import 'personalization_wizard_page.dart';
 import '../../models/day_progress.dart';
+import '../../models/session_settings.dart';
+import '../../models/user_progress_data.dart';
+import 'session_page.dart';
 
 class SynestheticMenuPage extends StatefulWidget {
   const SynestheticMenuPage({super.key});
@@ -15,7 +18,7 @@ class SynestheticMenuPage extends StatefulWidget {
 
 class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  Map<String, dynamic> _userProgress = {};
+  UserProgressData? _userProgress;
   List<String> _noteSequence = [];
   bool _isLoading = true;
   int _currentLevel = 1;
@@ -30,7 +33,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
 
   Future<void> _loadData() async {
     Log.i('🔄 Synesthetic Pitch: Loading data...');
-    final progress = await _memoryService.getUserProgress();
+    final progress = await _memoryService.ensureData();
     final level = await _memoryService.getCurrentLevel();
     final noteScores = await _memoryService.getAllNoteScores();
     
@@ -72,12 +75,12 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   }
 
   bool _isNoteLearned(String noteName) {
-    final learnedNotes = List<String>.from(_userProgress['synestetic_pitch']['leaned_notes']);
+    final learnedNotes = List<String>.from(_userProgress?.synestheticPitch.learnedNotes ?? []);
     return learnedNotes.contains(noteName);
   }
 
   bool _isNoteOpened(String noteName) {
-    final openedNotes = List<String>.from(_userProgress['synestetic_pitch']['opened_notes']);
+    final openedNotes = List<String>.from(_userProgress?.synestheticPitch.openedNotes ?? []);
     return openedNotes.contains(noteName);
   }
 
@@ -282,13 +285,13 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
                       children: [
                         _buildProgressItem(
                           'Opened',
-                          _userProgress['synestetic_pitch']['opened_notes'].length,
+                          _userProgress?.synestheticPitch.openedNotes.length ?? 0,
                           _noteSequence.length,
                           Colors.blue,
                         ),
                         _buildProgressItem(
                           'Learned',
-                          _userProgress['synestetic_pitch']['leaned_notes'].length,
+                          _userProgress?.synestheticPitch.learnedNotes.length ?? 0,
                           _noteSequence.length,
                           Colors.green,
                         ),
@@ -393,8 +396,19 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // TODO: Implement session logic
+                onPressed: () async {
+                  final sessionType = _getSessionType();
+                  if (sessionType != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SessionPage(sessionType: sessionType),
+                      ),
+                    ).then((_) async {
+                      // Reload data when returning from session
+                      await _loadData();
+                    });
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
@@ -435,7 +449,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   }
 
   Widget _buildSessionIconsLayout() {
-    final morningCompleted = _dayProgress!.morningSession.completed;
+    final morningCompleted = _dayProgress!.isMorningSessionCompleted();
     final instantSessions = _dayProgress!.dayPlan.instantSessionTimestamps;
     
     // Calculate row capacity based on available width for instant sessions
@@ -455,6 +469,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
       final startIndex = row * sessionsPerRow;
       final endIndex = (startIndex + sessionsPerRow).clamp(0, instantSessions.length);
       final rowSessions = instantSessions.sublist(startIndex, endIndex);
+      final currentSessionNumber = _dayProgress!.getCurrentInstantSession();
       
       final rowIcons = <Widget>[];
       for (int i = 0; i < rowSessions.length; i++) {
@@ -462,10 +477,12 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
         final sessionTime = rowSessions[i];
         final isCompleted = _dayProgress!.isInstantSessionComplete(sessionIndex);
         final isMissed = _isSessionMissed(sessionIndex, sessionTime);
+        final isCurrent = currentSessionNumber == sessionIndex;
         
         rowIcons.add(_buildInstantSessionIconWithTime(
           isCompleted, 
           isMissed, 
+          isCurrent,
           sessionTime,
         ));
         
@@ -507,6 +524,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
 
   Widget _buildMorningSessionIcon(bool completed) {
     final morningTime = _dayProgress!.dayPlan.morningSessionTimestamp;
+    final morningColor = completed ? const Color.fromARGB(255, 0, 183, 61) : const Color.fromARGB(255, 226, 211, 2);
     
     return Container(
       width: 80,
@@ -517,7 +535,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
           Icon(
             completed ? Icons.wb_sunny : Icons.wb_sunny_outlined,
             size: 40,
-            color: completed ? Colors.orange[700] : Colors.grey[600],
+            color: morningColor,
           ),
           const SizedBox(height: 4),
           Text(
@@ -525,7 +543,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
-              color: completed ? Colors.orange[700] : Colors.grey[600],
+              color: morningColor,
             ),
           ),
         ],
@@ -533,7 +551,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     );
   }
 
-  Widget _buildInstantSessionIconWithTime(bool completed, bool missed, DateTime sessionTime) {
+  Widget _buildInstantSessionIconWithTime(bool completed, bool missed, bool current, DateTime sessionTime) {
     IconData icon;
     Color iconColor;
     
@@ -541,9 +559,11 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     if (completed) {
       iconColor = Colors.green[700]!;
     } else if (missed) {
-      iconColor = Colors.grey[700]!;
+      iconColor = const Color.fromARGB(255, 85, 85, 85);
+    } else if (current) {
+      iconColor = Colors.orange[700]!;
     } else {
-      iconColor = Colors.blue[700]!;
+      iconColor = const Color.fromARGB(255, 118, 164, 210);
     }
     
     return Column(
@@ -594,7 +614,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   }
 
   Map<String, String> _getSessionButtonInfo() {
-    final morningCompleted = _dayProgress!.morningSession.completed;
+    final morningCompleted = _dayProgress!.isMorningSessionCompleted();
     final instantSessions = _dayProgress!.dayPlan.instantSessionTimestamps;
     final morningTime = _dayProgress!.dayPlan.morningSessionTimestamp;
     
@@ -619,7 +639,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     // Practice mode - either no current session or current session is completed
     final tomorrowMorning = morningTime.add(const Duration(days: 1));
     String statusMessage;
-    if (_dayProgress!.completedInstantSessions.length == instantSessions.length) {
+    if (_dayProgress!.completedInstantSessionNumbers.length == instantSessions.length) {
       statusMessage = 'All complete today! Next morning session at ${_formatTime(tomorrowMorning)}';
     } else {
       DateTime nextSessionTime;
@@ -695,5 +715,27 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
         ),
       ),
     );
+  }
+
+  SessionType? _getSessionType() {
+    if (_dayProgress == null) return null;
+    
+    final morningCompleted = _dayProgress!.isMorningSessionCompleted();
+    
+    // If morning session not completed, start morning session
+    if (!morningCompleted) {
+      return SessionType.morning;
+    }
+    
+    // Get current instant session that should be active
+    final currentSessionNumber = _dayProgress!.getCurrentInstantSession();
+    
+    // If there's a current instant session and it's not completed, start instant session
+    if (currentSessionNumber != null && !_dayProgress!.isInstantSessionComplete(currentSessionNumber)) {
+      return SessionType.instant;
+    }
+    
+    // Otherwise, start practice session
+    return SessionType.practice;
   }
 }

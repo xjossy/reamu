@@ -70,11 +70,8 @@ class _PersonalizationWizardPageState extends State<PersonalizationWizardPage> {
       final synestheticSettings = Map<String, dynamic>.from(settings['synestetic_pitch'] as Map);
       
       // Load saved personalization if exists
-      final progress = await _memoryService.getUserProgress();
-      Log.d('User progress keys: ${progress.keys}', tag: 'Personalization');
-      Log.d('Synesthetic pitch data: ${progress['synestetic_pitch']}', tag: 'Personalization');
-      final personalizationData = progress['synestetic_pitch']?['personalization'] as Map<String, dynamic>?;
-      Log.d('Personalization data: $personalizationData', tag: 'Personalization');
+      final progress = await _memoryService.ensureData();
+      final personalizationData = progress.synestheticPitch.personalization;
       
       setState(() {
         _minInstantSessions = synestheticSettings['minumum_instant_sessions'] as int? ?? 3;
@@ -82,7 +79,7 @@ class _PersonalizationWizardPageState extends State<PersonalizationWizardPage> {
         _defaultInstantSessions = synestheticSettings['default_instant_sessions'] as int? ?? 7;
         
         if (personalizationData != null) {
-          final personalization = PersonalizationSettings.fromJson(personalizationData);
+          final personalization = personalizationData;
           _morningTimeSlider = _timeToSlider(personalization.morningTime);
           _daylightDuration = personalization.daylightDurationHours;
           _instantSessions = personalization.instantSessionsPerDay.toDouble();
@@ -119,26 +116,18 @@ class _PersonalizationWizardPageState extends State<PersonalizationWizardPage> {
 
   Future<void> _saveAndComplete() async {
     // Check if this is the first time completing personalization
-    final progress = await _memoryService.getUserProgress();
-    final existingPersonalizationData = progress['synestetic_pitch']?['personalization'] as Map<String, dynamic>?;
-    final existingPersonalization = existingPersonalizationData != null 
-        ? PersonalizationSettings.fromJson(existingPersonalizationData)
-        : null;
+    final progress = await _memoryService.ensureData();
+    final existingPersonalization = progress.synestheticPitch.personalization;
     
     final isFirstCompletion = existingPersonalization == null 
         || !existingPersonalization.isCompleted 
         || existingPersonalization.completedAt == null;
     
     final personalization = getStateAsPersonalizationSettings().copyWith(
-      completedAt: isFirstCompletion ? DateTime.now() : existingPersonalization?.completedAt,
+      completedAt: isFirstCompletion ? DateTime.now() : existingPersonalization.completedAt,
     );
 
-    if (!progress.containsKey('synestetic_pitch')) {
-      progress['synestetic_pitch'] = {};
-    }
-    progress['synestetic_pitch']['personalization'] = personalization.toJson();
-    
-    await _memoryService.saveUserProgress(progress);
+    await _memoryService.savePersonalization(personalization);
     
     if (isFirstCompletion) {
       Log.i('🎉 Personalization completed for the first time at ${personalization.completedAt}', tag: 'Personalization');

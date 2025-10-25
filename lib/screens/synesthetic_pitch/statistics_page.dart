@@ -1,11 +1,9 @@
-import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
+import 'package:reamu/services/global_config_service.dart';
 import '../../services/global_memory_service.dart';
-import '../../services/settings_service.dart';
+import '../../models/user_progress_data.dart';
 import '../../models/describing_question.dart';
 import '../../models/note.dart';
-import 'package:flutter/services.dart';
-import 'package:yaml/yaml.dart';
 import '../../mixins/midi_cleanup_mixin.dart';
 import '../../widgets/hold_to_play_button.dart';
 
@@ -25,9 +23,8 @@ class StatisticsPage extends StatefulWidget {
 
 class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  final SettingsService _settingsService = SettingsService.instance;
-  Map<String, dynamic> _userProgress = {};
-  List<DescribingQuestion> _questions = [];
+  UserProgressData? _userProgress;
+  late List<DescribingQuestion> _questions;
   bool _isLoading = true;
   int? _currentNoteMidi;
 
@@ -38,35 +35,17 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
   }
 
   Future<void> _loadData() async {
-    await _loadQuestions();
+    final progress = await _memoryService.ensureData();
     
-    final progress = await _memoryService.getUserProgress();
     final note = Note.fromName(widget.selectedNote);
+    final config = await GlobalConfigService.instance.value();
     
     setState(() {
       _userProgress = progress;
       _currentNoteMidi = note.midiNumber;
+      _questions = config.questions;
       _isLoading = false;
     });
-  }
-
-  Future<void> _loadQuestions() async {
-    try {
-      final yamlString = await rootBundle.loadString('assets/describing_questions.yaml');
-      final yamlData = loadYaml(yamlString);
-      final questionsData = yamlData['questions'] as List;
-      
-      setState(() {
-        _questions = questionsData
-            .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
-            .toList();
-      });
-    } catch (e, stackTrace) {
-      Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'Statistics');
-      setState(() {
-        _questions = [];
-      });
-    }
   }
 
 
@@ -93,7 +72,7 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
       );
     }
 
-    final noteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.selectedNote];
+    final noteStats = _userProgress?.synestheticPitch.noteStatistics[widget.selectedNote];
     final hasStatistics = noteStats != null;
 
     return Scaffold(
@@ -184,8 +163,8 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
             if (hasStatistics) ...[
               // Statistics for each question (filter out unanswered questions)
               ...(_questions.where((question) {
-                final noteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.selectedNote];
-                final questionStatsRaw = noteStats?['questions']?[question.key];
+                final noteStats = _userProgress?.synestheticPitch.noteStatistics[widget.selectedNote];
+                final questionStatsRaw = noteStats?.questions[question.key];
                 return questionStatsRaw != null; // Only show questions that have been answered
               }).map((question) => _buildQuestionStats(question))),
             ] else ...[
@@ -263,8 +242,8 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
   }
 
   Widget _buildQuestionStats(DescribingQuestion question) {
-    final noteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.selectedNote];
-    final questionStatsRaw = noteStats?['questions']?[question.key];
+    final noteStats = _userProgress?.synestheticPitch.noteStatistics[widget.selectedNote];
+    final questionStatsRaw = noteStats?.questions[question.key];
     final questionStats = questionStatsRaw != null ? List<int>.from(questionStatsRaw) : null;
     
     // Get current session answer if this is from a learning session

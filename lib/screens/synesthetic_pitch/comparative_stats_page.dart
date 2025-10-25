@@ -7,6 +7,7 @@ import '../../models/describing_question.dart';
 import '../../models/note.dart';
 import '../../mixins/midi_cleanup_mixin.dart';
 import '../../widgets/hold_to_play_button.dart';
+import '../../models/user_progress_data.dart';
 
 class ComparativeStatsPage extends StatefulWidget {
   final String guessedNoteName;
@@ -26,11 +27,11 @@ class ComparativeStatsPage extends StatefulWidget {
 
 class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCleanupMixin {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  Map<String, dynamic> _userProgress = {};
+  UserProgressData? _progress;
   List<DescribingQuestion> _questions = [];
   bool _isLoading = true;
-  int? _guessedNoteMidi;
-  int? _actualNoteMidi;
+  int _guessedNoteMidi = 0;
+  int _actualNoteMidi = 0;
 
   @override
   void initState() {
@@ -41,12 +42,12 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
   Future<void> _loadData() async {
     await _loadQuestions();
     
-    final progress = await _memoryService.getUserProgress();
+    final progress = await _memoryService.ensureData();
     final guessedNote = Note.fromName(widget.guessedNoteName);
     final actualNote = Note.fromName(widget.actualNoteName);
     
     setState(() {
-      _userProgress = progress;
+      _progress = progress;
       _guessedNoteMidi = guessedNote.midiNumber;
       _actualNoteMidi = actualNote.midiNumber;
       _isLoading = false;
@@ -141,7 +142,7 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
                           ),
                           const SizedBox(height: 12),
                           HoldToPlayButton(
-                            midiNote: _guessedNoteMidi!,
+                            midiNote: _guessedNoteMidi,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
@@ -195,7 +196,7 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
                           ),
                           const SizedBox(height: 12),
                           HoldToPlayButton(
-                            midiNote: _actualNoteMidi!,
+                            midiNote: _actualNoteMidi,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
@@ -275,11 +276,11 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
   }
 
   Widget _buildQuestionComparison(DescribingQuestion question) {
-    final guessedNoteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.guessedNoteName];
-    final actualNoteStats = _userProgress['synestetic_pitch']['note_statistics'][widget.actualNoteName];
+    final guessedNoteStats = _progress?.synestheticPitch.noteStatistics[widget.guessedNoteName];
+    final actualNoteStats = _progress?.synestheticPitch.noteStatistics[widget.actualNoteName];
     
-    final guessedQuestionStatsRaw = guessedNoteStats?['questions']?[question.key];
-    final actualQuestionStatsRaw = actualNoteStats?['questions']?[question.key];
+    final guessedQuestionStatsRaw = guessedNoteStats?.questions[question.key];
+    final actualQuestionStatsRaw = actualNoteStats?.questions[question.key];
     
     final guessedQuestionStats = guessedQuestionStatsRaw != null ? List<int>.from(guessedQuestionStatsRaw) : null;
     final actualQuestionStats = actualQuestionStatsRaw != null ? List<int>.from(actualQuestionStatsRaw) : null;

@@ -4,13 +4,11 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../core/debug_config.dart';
 import 'global_memory_service.dart';
-import 'session_service.dart';
 import 'settings_service.dart';
 
 class DebugService {
   static const String _userProgressFile = 'user_progress.json';
   static const String _sessionsFile = 'synesthetic_sessions.json';
-  static const String _settingsFile = 'global_settings.yaml';
   
   static DebugService? _instance;
   
@@ -22,7 +20,6 @@ class DebugService {
   }
 
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  final SessionService _sessionService = SessionService.instance;
   final SettingsService _settingsService = SettingsService.instance;
 
   Future<Map<String, dynamic>> getAllUserData() async {
@@ -32,16 +29,8 @@ class DebugService {
 
     try {
       // User Progress
-      final userProgress = await _memoryService.getUserProgress();
-      allData['user_progress'] = userProgress;
-
-      // Sessions
-      final sessions = await _sessionService.getSessionHistory();
-      allData['sessions'] = sessions.map((s) => s.toJson()).toList();
-
-      // Current Session
-      final currentSession = await _sessionService.getCurrentSession();
-      allData['current_session'] = currentSession?.toJson();
+      final userProgress = await _memoryService.ensureData();
+      allData['user_progress'] = userProgress.toJson();
 
       // Level and Scores
       allData['current_level'] = await _memoryService.getCurrentLevel();

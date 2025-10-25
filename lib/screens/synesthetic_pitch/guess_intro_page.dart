@@ -97,22 +97,6 @@ class GuessIntroPage extends StatelessWidget {
                   ),
                 ),
               ),
-              
-              const SizedBox(height: 16),
-              
-              // Back Button
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text(
-                  'Back to Menu',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black54,
-                  ),
-                ),
-              ),
             ],
           ),
         ),

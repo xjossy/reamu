@@ -1,50 +1,129 @@
+import 'active_session.dart';
+import 'session_manager.dart';
+import 'session_settings.dart';
+
 /// Represents a user's daily progress for synesthetic pitch training
 class DayProgress {
-  final MorningSession morningSession;
-  final List<InstantSession> completedInstantSessions;
   final DayPlan dayPlan;
+  
+  // Session ID mappings - now mutable
+  String? morningSessionId;
+  String? practiceSessionId;
+  Map<int, String> instantSessions; // instant session number -> session ID
+  String? activeInstantSessionId;
+  List<int> completedInstantSessionNumbers; // numbers of completed instant sessions
+  
+  // Session management via SessionManager
+  final SessionManager sessionManager;
 
   DayProgress({
-    required this.morningSession,
-    required this.completedInstantSessions,
     required this.dayPlan,
-  });
+    this.morningSessionId,
+    this.practiceSessionId,
+    Map<int, String>? instantSessions,
+    this.activeInstantSessionId,
+    List<int>? completedInstantSessionNumbers,
+    SessionManager? sessionManager,
+  })  : instantSessions = instantSessions ?? {},
+        completedInstantSessionNumbers = completedInstantSessionNumbers ?? [],
+        sessionManager = sessionManager ?? SessionManager();
 
   factory DayProgress.fromJson(Map<String, dynamic> json) {
+    // Create session manager and populate it
+    final sessionManager = SessionManager();
+    
+    if (json['sessions'] != null) {
+      final sessionsJson = Map<String, dynamic>.from(json['sessions'] as Map);
+      for (final entry in sessionsJson.entries) {
+        try {
+          final sessionData = SessionData.fromJson(
+            Map<String, dynamic>.from(entry.value as Map),
+          );
+          sessionManager.saveSession(sessionData);
+        } catch (e) {
+          // Skip invalid session data
+        }
+      }
+    }
+
+    // Parse instant sessions mapping
+    final instantSessionsMap = <int, String>{};
+    if (json['instant_sessions'] != null) {
+      final instantJson = Map<String, dynamic>.from(json['instant_sessions'] as Map);
+      for (final entry in instantJson.entries) {
+        instantSessionsMap[int.parse(entry.key)] = entry.value as String;
+      }
+    }
+
+    // Parse completed instant session numbers
+    final completedNumbers = <int>[];
+    if (json['completed_instant_session_numbers'] != null) {
+      completedNumbers.addAll(List<int>.from(json['completed_instant_session_numbers'] as List));
+    }
+
     return DayProgress(
-      morningSession: MorningSession.fromJson(
-        Map<String, dynamic>.from(json['morning_session'] as Map),
-      ),
-      completedInstantSessions: (json['completed_instant_sessions'] as List?)
-              ?.map((e) => InstantSession.fromJson(Map<String, dynamic>.from(e as Map)))
-              .toList() ??
-          [],
       dayPlan: DayPlan.fromJson(
         Map<String, dynamic>.from(json['day_plan'] as Map),
       ),
+      morningSessionId: json['morning_session_id'] as String?,
+      practiceSessionId: json['practice_session_id'] as String?,
+      instantSessions: instantSessionsMap,
+      activeInstantSessionId: json['active_instant_session_id'] as String?,
+      completedInstantSessionNumbers: completedNumbers,
+      sessionManager: sessionManager,
     );
   }
 
   Map<String, dynamic> toJson() {
+    // Convert all sessions from SessionManager to JSON
+    final sessionsJson = <String, dynamic>{};
+    for (final session in sessionManager.getSessions().values) {
+      sessionsJson[session.id] = session.toJson();
+    }
+
     return {
-      'morning_session': morningSession.toJson(),
-      'completed_instant_sessions':
-          completedInstantSessions.map((s) => s.toJson()).toList(),
       'day_plan': dayPlan.toJson(),
+      'morning_session_id': morningSessionId,
+      'practice_session_id': practiceSessionId,
+      'instant_sessions': instantSessions.map((key, value) => MapEntry(key.toString(), value)),
+      'active_instant_session_id': activeInstantSessionId,
+      'completed_instant_session_numbers': completedInstantSessionNumbers,
+      'sessions': sessionsJson,
     };
   }
 
-  DayProgress copyWith({
-    MorningSession? morningSession,
-    List<InstantSession>? completedInstantSessions,
-    DayPlan? dayPlan,
-  }) {
-    return DayProgress(
-      morningSession: morningSession ?? this.morningSession,
-      completedInstantSessions:
-          completedInstantSessions ?? this.completedInstantSessions,
-      dayPlan: dayPlan ?? this.dayPlan,
-    );
+  /// Get session by ID
+  SessionData? getSessionById(String sessionId) {
+    return sessionManager.getSessionById(sessionId);
+  }
+
+  /// Save/update session in this day progress
+  void saveSession(SessionData session) {
+    sessionManager.saveSession(session);
+  }
+
+  /// Remove session by ID
+  void removeSession(String sessionId) {
+    sessionManager.removeSession(sessionId);
+  }
+
+  /// Check if morning session is completed
+  bool isMorningSessionCompleted() {
+    if (morningSessionId == null) return false;
+    final session = getSessionById(morningSessionId!);
+    return session?.isCompleted ?? false;
+  }
+
+  /// Check if practice session is completed
+  bool isPracticeSessionCompleted() {
+    if (practiceSessionId == null) return false;
+    final session = getSessionById(practiceSessionId!);
+    return session?.isCompletedSuccessfully ?? false;
+  }
+
+  /// Check if the specified instant session has been completed
+  bool isInstantSessionComplete(int sessionNumber) {
+    return completedInstantSessionNumbers.contains(sessionNumber);
   }
 
   /// Returns the current instant session number that should be active now,
@@ -53,71 +132,38 @@ class DayProgress {
     return dayPlan.getCurrentInstantSession();
   }
 
-  /// Returns true if the specified instant session has been completed.
-  bool isInstantSessionComplete(int sessionNumber) {
-    return completedInstantSessions.any((s) => s.number == sessionNumber);
-  }
-}
-
-/// Represents the morning session completion status
-class MorningSession {
-  final bool completed;
-  final DateTime? completionTimestamp;
-
-  MorningSession({
-    required this.completed,
-    this.completionTimestamp,
-  });
-
-  factory MorningSession.fromJson(Map<String, dynamic> json) {
-    return MorningSession(
-      completed: json['completed'] as bool? ?? false,
-      completionTimestamp: json['completion_timestamp'] != null
-          ? DateTime.parse(json['completion_timestamp'] as String)
-          : null,
+  /// Create a new session and save it, updating day progress state directly
+  SessionData createAndSaveSession(
+    SessionType type,
+    SessionSettings settings,
+    List<String> learnedNotes,
+    {int? instantSessionNumber}
+  ) {
+    // Create the session via SessionManager
+    final session = sessionManager.createSession(
+      day: DateTime.now().toString().split(' ')[0],
+      type: type,
+      settings: settings,
+      learnedNotes: learnedNotes,
     );
-  }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'completed': completed,
-      'completion_timestamp': completionTimestamp?.toIso8601String(),
-    };
-  }
+    // Update session ID mappings directly
+    switch (type) {
+      case SessionType.morning:
+        morningSessionId = session.id;
+        break;
+      case SessionType.practice:
+        practiceSessionId = session.id;
+        break;
+      case SessionType.instant:
+        if (instantSessionNumber != null) {
+          instantSessions[instantSessionNumber] = session.id;
+          activeInstantSessionId = session.id;
+        }
+        break;
+    }
 
-  MorningSession copyWith({
-    bool? completed,
-    DateTime? completionTimestamp,
-  }) {
-    return MorningSession(
-      completed: completed ?? this.completed,
-      completionTimestamp: completionTimestamp ?? this.completionTimestamp,
-    );
-  }
-}
-
-/// Represents a completed instant session
-class InstantSession {
-  final int number;
-  final DateTime completionTimestamp;
-
-  InstantSession({
-    required this.number,
-    required this.completionTimestamp,
-  });
-
-  factory InstantSession.fromJson(Map<String, dynamic> json) {
-    return InstantSession(
-      number: json['number'] as int,
-      completionTimestamp: DateTime.parse(json['completion_timestamp'] as String),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'number': number,
-      'completion_timestamp': completionTimestamp.toIso8601String(),
-    };
+    return session;
   }
 }
 
