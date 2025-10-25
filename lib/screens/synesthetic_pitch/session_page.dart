@@ -1,9 +1,9 @@
+import 'package:reamu/screens/synesthetic_pitch/guess_intro_page.dart';
+
 import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
 import '../../services/session_service.dart';
-import '../../services/global_memory_service.dart';
 import '../../models/synesthetic_session.dart';
-import 'guessing_page.dart';
 
 class SessionPage extends StatefulWidget {
   const SessionPage({super.key});
@@ -14,7 +14,6 @@ class SessionPage extends StatefulWidget {
 
 class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   final SessionService _sessionService = SessionService.instance;
-  final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
   
   SynestheticSession? _currentSession;
   bool _isLoading = true;
@@ -94,32 +93,6 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _startNewSession() async {
-    try {
-      final newSession = await _sessionService.startNewSession();
-      setState(() {
-        _currentSession = newSession;
-      });
-    } catch (e) {
-      // Show error dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Cannot Start Session'),
-            content: Text(e.toString()),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _startGuessing() async {
     if (_currentSession == null) return;
     
@@ -137,10 +110,9 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => GuessingPage(
+        builder: (context) => GuessIntroPage(
           questionCount: 5, // Default question count
-          sessionId: _currentSession!.id,
-          targetNote: currentNote,
+          targetNoteName: currentNote,
         ),
       ),
     );

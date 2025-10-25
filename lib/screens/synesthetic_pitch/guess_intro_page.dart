@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
-import 'guessing_page.dart';
 
 class GuessIntroPage extends StatelessWidget {
   final int questionCount;
+  final String targetNoteName;
+  final VoidCallback? onStartGuessing;
   
-  const GuessIntroPage({super.key, required this.questionCount});
+  const GuessIntroPage({
+    super.key, 
+    required this.questionCount, 
+    required this.targetNoteName, 
+    this.onStartGuessing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -72,12 +78,7 @@ class GuessIntroPage extends StatelessWidget {
               // Start Button
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => GuessingPage(questionCount: questionCount),
-                    ),
-                  );
+                  onStartGuessing?.call();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purple,

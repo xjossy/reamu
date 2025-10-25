@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
-import 'describing_page.dart';
+import '../../widgets/piano_keyboard.dart';
 
 class LearningIntroPage extends StatelessWidget {
   final String noteName;
+  final VoidCallback? onStartLearning;
   
-  const LearningIntroPage({super.key, required this.noteName});
+  const LearningIntroPage({
+    super.key, 
+    required this.noteName,
+    this.onStartLearning,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +81,15 @@ class LearningIntroPage extends StatelessWidget {
               
               const SizedBox(height: 32),
               
+              // Piano Keyboard
+              PianoKeyboard(
+                targetNote: noteName,
+                width: 350,
+                keyHeight: 100,
+              ),
+              
+              const SizedBox(height: 32),
+              
               // Description
               Text(
                 'Describe your synesthetic associations with this note by answering questions about color, size, texture, and shape.',
@@ -92,12 +106,7 @@ class LearningIntroPage extends StatelessWidget {
               // Proceed Button
               ElevatedButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => DescribingPage(selectedNote: noteName),
-                    ),
-                  );
+                  onStartLearning?.call();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.teal,

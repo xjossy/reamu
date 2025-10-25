@@ -12,14 +12,12 @@ class ComparativeStatsPage extends StatefulWidget {
   final String guessedNoteName;
   final String actualNoteName;
   final Map<String, String> sessionAnswers;
-  final String? sessionId;
 
   const ComparativeStatsPage({
     super.key,
     required this.guessedNoteName,
     required this.actualNoteName,
     required this.sessionAnswers,
-    this.sessionId,
   });
 
   @override
@@ -237,21 +235,12 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  if (widget.sessionId != null) {
-                    // Return to session page
-                    Navigator.of(context).popUntil((route) {
-                      return route.settings.name == '/session' ||
-                             (route is MaterialPageRoute && route.builder.toString().contains('SessionPage')) ||
-                             route.isFirst;
-                    });
-                  } else {
-                    // Pop all pages to go back to synesthetic menu
-                    Navigator.of(context).popUntil((route) {
-                      return route.settings.name == '/synesthetic_menu' || 
-                             (route is MaterialPageRoute && route.builder.toString().contains('SynestheticMenuPage')) ||
-                             route.isFirst;
-                    });
-                  }
+                  // Pop all pages to go back to synesthetic menu
+                  Navigator.of(context).popUntil((route) {
+                    return route.settings.name == '/synesthetic_menu' || 
+                           (route is MaterialPageRoute && route.builder.toString().contains('SynestheticMenuPage')) ||
+                           route.isFirst;
+                  });
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purple,
@@ -261,9 +250,9 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Text(
-                  widget.sessionId != null ? 'Back to Session' : 'Back to Menu',
-                  style: const TextStyle(
+                child: const Text(
+                  'Back to Menu',
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                   ),

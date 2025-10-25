@@ -1,24 +1,21 @@
-import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
-import '../../services/settings_service.dart';
 import '../../models/note.dart';
 import 'statistics_page.dart';
 import 'comparative_stats_page.dart';
-import '../../services/session_service.dart';
 import '../../mixins/midi_cleanup_mixin.dart';
 import '../../widgets/hold_to_play_button.dart';
 
 class GuessNoteSelectionPage extends StatefulWidget {
   final String actualNoteName;
   final Map<String, String> sessionAnswers;
-  final String? sessionId;
-  
+  final Function(String guessedNote, bool isCorrect)? onNoteSelected;
+
   const GuessNoteSelectionPage({
     super.key,
     required this.actualNoteName,
     required this.sessionAnswers,
-    this.sessionId,
+    this.onNoteSelected,
   });
 
   @override
@@ -27,10 +24,7 @@ class GuessNoteSelectionPage extends StatefulWidget {
 
 class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with MidiCleanupMixin {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  final SettingsService _settingsService = SettingsService.instance;
-  final SessionService _sessionService = SessionService.instance;
   Map<String, dynamic> _userProgress = {};
-  List<String> _noteSequence = [];
   bool _isLoading = true;
 
   @override
@@ -41,11 +35,9 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
 
   Future<void> _loadData() async {
     final progress = await _memoryService.getUserProgress();
-    final noteSequence = await _settingsService.getSynestheticNoteSequence();
     
     setState(() {
       _userProgress = progress;
-      _noteSequence = noteSequence;
       _isLoading = false;
     });
   }
@@ -73,17 +65,13 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
   void _selectNote(String guessedNoteName) async {
     final isCorrect = guessedNoteName == widget.actualNoteName;
     
-    // Record session result if in a session
-    if (widget.sessionId != null) {
-      Log.d('💾 Recording guess for session ${widget.sessionId}...', tag: 'GuessSelect');
-      if (isCorrect) {
-        await _sessionService.recordCorrectGuess(widget.sessionId!, widget.actualNoteName);
-      } else {
-        await _sessionService.recordIncorrectGuess(widget.sessionId!, widget.actualNoteName, guessedNoteName);
-      }
-      Log.i('✅ Guess recorded successfully', tag: 'GuessSelect');
+    // If callback is provided, use it (for flow management)
+    if (widget.onNoteSelected != null) {
+      widget.onNoteSelected!(guessedNoteName, isCorrect);
+      return;
     }
     
+    // Otherwise, use legacy behavior (should not happen with flow)
     if (isCorrect) {
       // Correct answer - show success dialog
       await showDialog(
@@ -114,27 +102,18 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
               onPressed: () {
                 Navigator.pop(context); // Close dialog
                 
-                if (widget.sessionId != null) {
-                  // Return to session page
-                  Navigator.of(context).popUntil((route) {
-                    return route.settings.name == '/session' ||
-                           (route is MaterialPageRoute && route.builder.toString().contains('SessionPage')) ||
-                           route.isFirst;
-                  });
-                } else {
-                  // Navigate to statistics page (regular guess mode)
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => StatisticsPage(
-                        selectedNote: widget.actualNoteName,
-                        sessionAnswers: widget.sessionAnswers,
-                      ),
+                // Navigate to statistics page
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => StatisticsPage(
+                      selectedNote: widget.actualNoteName,
+                      sessionAnswers: widget.sessionAnswers,
                     ),
-                  );
-                }
+                  ),
+                );
               },
-              child: Text(widget.sessionId != null ? 'Continue Session' : 'View Statistics'),
+              child: const Text('View Statistics'),
             ),
           ],
         ),
@@ -148,7 +127,6 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
             guessedNoteName: guessedNoteName,
             actualNoteName: widget.actualNoteName,
             sessionAnswers: widget.sessionAnswers,
-            sessionId: widget.sessionId,
           ),
         ),
       );
@@ -230,7 +208,6 @@ class _GuessNoteSelectionPageState extends State<GuessNoteSelectionPage> with Mi
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: rowNotes.map((noteName) {
                     final isLearned = _isNoteLearned(noteName);
-                    final isActualNote = noteName == widget.actualNoteName;
                     
                     final note = Note.fromName(noteName);
                     return Expanded(

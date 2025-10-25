@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/logging_service.dart';
-import '../../services/settings_service.dart';
 import 'statistics_page.dart';
-import 'learning_intro_page.dart';
+import 'learning_flow.dart';
 import 'personalization_wizard_page.dart';
-import '../../models/personalization_settings.dart';
 import '../../models/day_progress.dart';
 
 class SynestheticMenuPage extends StatefulWidget {
@@ -17,7 +15,6 @@ class SynestheticMenuPage extends StatefulWidget {
 
 class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  final SettingsService _settingsService = SettingsService.instance;
   Map<String, dynamic> _userProgress = {};
   List<String> _noteSequence = [];
   bool _isLoading = true;
@@ -36,7 +33,6 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     final progress = await _memoryService.getUserProgress();
     final level = await _memoryService.getCurrentLevel();
     final noteScores = await _memoryService.getAllNoteScores();
-    final settings = await _settingsService.getSettings();
     
     // Create keyboard order from C3 to C5
     final keyboardNotes = _generateKeyboardNotes();
@@ -49,7 +45,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     } catch (e, stackTrace) {
       Log.e('Error loading day progress', error: e, stackTrace: stackTrace, tag: 'SynestheticMenu');
     }
-    
+
     setState(() {
       _userProgress = progress;
       _noteSequence = keyboardNotes;
@@ -58,85 +54,8 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
       _dayProgress = dayProgress;
       _isLoading = false;
     });
-    
-    // Check if we need to redirect user to learning or personalization
-    await _checkAndRedirect(settings);
   }
 
-  Future<void> _checkAndRedirect(Map<String, dynamic> settings) async {
-    final synestheticSettings = Map<String, dynamic>.from(settings['synestetic_pitch'] as Map);
-    final startWithNotes = synestheticSettings['start_with_notes'] as int;
-    
-    final learnedNotes = List<String>.from(
-      _userProgress['synestetic_pitch']?['leaned_notes'] ?? []
-    );
-    
-    // Case 1: User hasn't learned start_with_notes yet
-    if (learnedNotes.length < startWithNotes) {
-      Log.i('📚 User needs to learn more notes (${learnedNotes.length}/$startWithNotes)');
-      if (mounted) {
-        // Get the next note to learn
-        final noteSequence = synestheticSettings['note_sequence'] as List<dynamic>;
-        final openedNotes = List<String>.from(
-          _userProgress['synestetic_pitch']?['opened_notes'] ?? []
-        );
-        
-        // Find first unopened note or first unlearned note
-        String? nextNote;
-        for (final note in noteSequence) {
-          final noteName = note as String;
-          if (!openedNotes.contains(noteName)) {
-            nextNote = noteName;
-            break;
-          }
-          if (!learnedNotes.contains(noteName)) {
-            nextNote = noteName;
-            break;
-          }
-        }
-        
-        if (nextNote != null) {
-          // Navigate to learning flow
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => LearningIntroPage(noteName: nextNote!),
-            ),
-          );
-          // Reload data after returning
-          await _loadData();
-        }
-      }
-      return;
-    }
-    
-    // Case 2: User learned enough notes but hasn't completed personalization
-    final personalizationData = _userProgress['synestetic_pitch']?['personalization'] as Map<String, dynamic>?;
-    final personalization = personalizationData != null 
-        ? PersonalizationSettings.fromJson(personalizationData)
-        : null;
-    
-    if (personalization == null || !personalization.isCompleted) {
-      Log.i('⚙️ User needs to complete personalization');
-      if (mounted) {
-        final completed = await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const PersonalizationWizardPage(),
-          ),
-        );
-        
-        // Reload data after completing personalization
-        if (completed == true) {
-          await _loadData();
-        }
-      }
-      return;
-    }
-
-    // Case 3: All setup complete - user sees normal menu
-    Log.i('✅ User setup complete, showing normal menu');
-  }
 
   List<String> _generateKeyboardNotes() {
     final notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'H'];
@@ -262,7 +181,7 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
                     
                     return Expanded(
                       child: GestureDetector(
-                        onTap: (isLearned || isOpened) ? () {
+                        onTap: (isLearned || isOpened) ? () async {
                           if (isLearned) {
                             // Learned note: Show statistics
                             Navigator.push(
@@ -273,12 +192,10 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
                             ).then((_) => _loadData()); // Refresh when returning
                           } else if (isOpened) {
                             // Opened but not learned: Start learning process
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => LearningIntroPage(noteName: noteName),
-                              ),
-                            ).then((_) => _loadData()); // Refresh when returning
+                            final completed = await LearningFlow.runLearning(context, noteName);
+                            if (completed) {
+                              await _loadData(); // Refresh when returning successfully
+                            }
                           }
                         } : null,
                         child: Container(
@@ -520,7 +437,6 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   Widget _buildSessionIconsLayout() {
     final morningCompleted = _dayProgress!.morningSession.completed;
     final instantSessions = _dayProgress!.dayPlan.instantSessionTimestamps;
-    final completedInstantSessions = _dayProgress!.completedInstantSessions;
     
     // Calculate row capacity based on available width for instant sessions
     final screenWidth = MediaQuery.of(context).size.width;

@@ -1,18 +1,23 @@
 import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:yaml/yaml.dart';
 import '../../models/describing_question.dart';
 import '../../services/midi_service.dart';
-import '../../services/global_memory_service.dart';
-import '../../services/settings_service.dart';
+import '../../services/global_config_service.dart';
 import '../../models/note.dart';
-import 'statistics_page.dart';
 
 class DescribingPage extends StatefulWidget {
-  final String? selectedNote;
+  final String selectedNote;
+  final List<String>? questionsList;
+  final bool showNoteName;
+  final Future<void> Function(Map<String, String> answers) doNext;
   
-  const DescribingPage({super.key, this.selectedNote});
+  const DescribingPage({
+    super.key, 
+    required this.selectedNote, 
+    this.questionsList, 
+    required this.showNoteName,
+    required this.doNext,
+  });
 
   @override
   State<DescribingPage> createState() => _DescribingPageState();
@@ -20,16 +25,13 @@ class DescribingPage extends StatefulWidget {
 
 class _DescribingPageState extends State<DescribingPage> {
   final MidiService _midiService = MidiService();
-  final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
-  final SettingsService _settingsService = SettingsService.instance;
+  final GlobalConfigService _configService = GlobalConfigService.instance;
   bool _isLoaded = false;
+  late Note _currentNote;
   List<DescribingQuestion> _questions = [];
   int _currentQuestionIndex = 0;
   String? _selectedOption;
-  Map<String, String> _answers = {};
-  String? _currentNoteName;
-  int _currentNoteMidi = 60;
-  Map<String, dynamic> _userProgress = {};
+  final Map<String, String> _answers = {};
 
   @override
   void initState() {
@@ -46,10 +48,19 @@ class _DescribingPageState extends State<DescribingPage> {
   }
 
   Future<void> _initializeApp() async {
-    await _initializeMidi();
-    await _loadUserProgress();
-    await _loadQuestions();
-    await _setupCurrentNote();
+    final success = await _midiService.initialize();
+    assert(success, 'MidiService initialization failed');
+    final config = await _configService.value();
+    setState(() {
+      _questions = widget.questionsList != null ? widget.questionsList!.map((question) => config.getQuestion(question)!).toList() : config.getAllQuestions();
+      _currentNote = Note.fromName(widget.selectedNote);
+      _isLoaded = true;
+    });
+    
+    // Auto-play note after setup
+    if (_isLoaded) {
+      _autoPlayNote();
+    }
   }
 
   void _autoPlayNote() {
@@ -67,64 +78,9 @@ class _DescribingPageState extends State<DescribingPage> {
     _autoPlayNote();
   }
 
-  Future<void> _initializeMidi() async {
-    final success = await _midiService.initialize();
-    setState(() {
-      _isLoaded = success;
-    });
-  }
-
-  Future<void> _loadUserProgress() async {
-    _userProgress = await _memoryService.getUserProgress();
-  }
-
-  Future<void> _setupCurrentNote() async {
-    if (widget.selectedNote != null) {
-      // Use the selected note from Learn mode
-      _currentNoteName = widget.selectedNote;
-    } else {
-      // Use the next note in sequence
-      _currentNoteName = await _settingsService.getCurrentNote(_userProgress);
-    }
-    
-    if (_currentNoteName != null) {
-      // Convert note name to MIDI number
-      final note = Note.fromName(_currentNoteName!);
-      _currentNoteMidi = note.midiNumber;
-      
-      // Mark note as opened
-      await _memoryService.markNoteAsOpened(_currentNoteName!);
-      
-      // Auto-play note after setup
-      if (_isLoaded) {
-        _autoPlayNote();
-      }
-    }
-  }
-
-  Future<void> _loadQuestions() async {
-    try {
-      final yamlString = await rootBundle.loadString('assets/describing_questions.yaml');
-      final yamlData = loadYaml(yamlString);
-      final questionsData = yamlData['questions'] as List;
-      
-      setState(() {
-        _questions = questionsData
-            .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
-            .toList();
-      });
-    } catch (e, stackTrace) {
-      Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'Describing');
-      // Show error message if YAML fails
-      setState(() {
-        _questions = [];
-      });
-    }
-  }
-
   void _replayNote() {
     if (_isLoaded) {
-      _midiService.playNote(_currentNoteMidi);
+      _midiService.playNote(_currentNote.midiNumber);
     }
   }
 
@@ -154,8 +110,7 @@ class _DescribingPageState extends State<DescribingPage> {
         _answers[_questions[_currentQuestionIndex].key] = _selectedOption!;
       }
       
-      // Show summarization
-      _showSummarization();
+      widget.doNext(_answers);
     }
   }
 
@@ -169,40 +124,8 @@ class _DescribingPageState extends State<DescribingPage> {
       // Auto-play note for new question
       _autoPlayNote();
     } else {
-      // Show summarization
-      _showSummarization();
+      widget.doNext(_answers);
     }
-  }
-
-  void _showSummarization() async {
-    if (_currentNoteName == null) return;
-    
-    // Save statistics for each answered question
-    for (final entry in _answers.entries) {
-      final question = _questions.firstWhere((q) => q.key == entry.key);
-      await _memoryService.updateNoteStatistics(
-        _currentNoteName!, 
-        entry.key, 
-        entry.value, 
-        question.options
-      );
-    }
-    
-    // Mark note as learned if all questions answered
-    if (_answers.length == _questions.length) {
-      await _memoryService.markNoteAsLearned(_currentNoteName!);
-    }
-    
-    // Navigate to statistics screen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => StatisticsPage(
-          selectedNote: _currentNoteName!,
-          sessionAnswers: _answers,
-        ),
-      ),
-    );
   }
 
   @override
@@ -284,8 +207,8 @@ class _DescribingPageState extends State<DescribingPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Title
-                      const Text(
-                        'Describe the Note',
+                      Text(
+                        widget.showNoteName ? 'Describe the Note: ${_currentNote.fullName}' : 'Describe the Note',
                         style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,

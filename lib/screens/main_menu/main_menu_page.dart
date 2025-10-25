@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/menu_tile.dart';
 import '../absolute_pitch/absolute_pitch_page.dart';
 import '../simple_playing/simple_playing_page.dart';
-import '../synesthetic_pitch/synesthetic_menu_page.dart';
+import '../synesthetic_pitch/synesthetic_flow.dart';
 import 'settings_page.dart';
 
 class MainMenuPage extends StatelessWidget {
@@ -81,12 +81,7 @@ class MainMenuPage extends StatelessWidget {
               icon: Icons.psychology,
               color: Colors.teal,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SynestheticMenuPage(),
-                  ),
-                );
+                SynestheticFlow.run(context);
               },
             ),
           ],

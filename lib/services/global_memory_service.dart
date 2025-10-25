@@ -1,3 +1,5 @@
+import 'package:reamu/services/global_config_service.dart';
+
 import 'logging_service.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -10,6 +12,7 @@ import '../models/personalization_settings.dart';
 class GlobalMemoryService {
   static const String _fileName = 'user_progress.json';
   static GlobalMemoryService? _instance;
+  final GlobalConfigService _configService = GlobalConfigService.instance;
   
   GlobalMemoryService._();
   
@@ -38,14 +41,13 @@ class GlobalMemoryService {
   Future<void> saveUserProgress(Map<String, dynamic> progress) async {
     try {
       final file = await _getFile();
-      await file.writeAsString(jsonEncode(progress));
+      await file.writeAsString(jsonEncode(progress), flush: true);
     } catch (e, stackTrace) {
       Log.e('Error saving user progress', error: e, stackTrace: stackTrace, tag: 'Memory');
     }
   }
 
-  Future<void> updateNoteStatistics(String noteName, String questionKey, String answer, List<String> allOptions) async {
-    final progress = await getUserProgress();
+  void _updateNoteStatisticsImpl(ConfigValue config, Map<String, dynamic> progress, String noteName, String questionKey, String answer) {
     final noteStatistics = progress['synestetic_pitch']['note_statistics'];
     
     // Initialize note statistics if not exists
@@ -56,14 +58,15 @@ class GlobalMemoryService {
     }
 
     final questions = noteStatistics[noteName]['questions'];
+    final question = config.getQuestion(questionKey)!;
     
     // Initialize question if not exists
     if (!questions.containsKey(questionKey)) {
-      questions[questionKey] = List.filled(allOptions.length, 0);
+      questions[questionKey] = List.filled(question.options.length, 0);
     }
     
     // Find answer index and increment
-    final answerIndex = allOptions.indexOf(answer);
+    final answerIndex = question.options.indexOf(answer);
     if (answerIndex >= 0) {
       if (answerIndex >= questions[questionKey].length) {
         final missingCount = (answerIndex - questions[questionKey].length + 1).toInt();
@@ -71,6 +74,24 @@ class GlobalMemoryService {
       }
       questions[questionKey][answerIndex]++;
     }
+  }
+
+  Future<void> updateNotesStatistics(String noteName, Map<String, dynamic> answers) async {
+    final progress = await getUserProgress();
+    final config = await _configService.value();
+    
+    for (final answer in answers.entries) {
+      _updateNoteStatisticsImpl(config, progress, noteName, answer.key, answer.value);
+    }
+
+    await saveUserProgress(progress);
+  }
+
+  Future<void> updateNoteStatistics(String noteName, String questionKey, String answer) async {
+    final progress = await getUserProgress();
+
+    final config = await _configService.value();
+    _updateNoteStatisticsImpl(config, progress, noteName, questionKey, answer);
     
     await saveUserProgress(progress);
   }
