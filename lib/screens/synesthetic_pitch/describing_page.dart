@@ -246,16 +246,16 @@ class _DescribingPageState extends State<DescribingPage> {
                           itemCount: currentQuestion.options.length,
                           itemBuilder: (context, index) {
                             final option = currentQuestion.options[index];
-                            final isSelected = _selectedOption == option;
+                            final isSelected = _selectedOption == option.key;
                             
                             return Container(
                               margin: const EdgeInsets.only(bottom: 2),
                               child: RadioListTile<String>(
-                                value: option,
+                                value: option.key,
                                 groupValue: _selectedOption,
                                 onChanged: (value) => _selectOption(value!),
                                 title: Text(
-                                  option,
+                                  option.nameEn,
                                   style: TextStyle(
                                     color: isSelected ? Colors.black : Colors.black87,
                                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,

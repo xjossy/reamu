@@ -1,8 +1,6 @@
-import '../../services/logging_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:yaml/yaml.dart';
 import '../../services/global_memory_service.dart';
+import '../../services/global_config_service.dart';
 import '../../models/describing_question.dart';
 import '../../models/note.dart';
 import '../../mixins/midi_cleanup_mixin.dart';
@@ -40,38 +38,22 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
   }
 
   Future<void> _loadData() async {
-    await _loadQuestions();
-    
+    final configService = GlobalConfigService.instance;
+    final config = await configService.value();
     final progress = await _memoryService.ensureData();
     final guessedNote = Note.fromName(widget.guessedNoteName);
     final actualNote = Note.fromName(widget.actualNoteName);
     
     setState(() {
       _progress = progress;
+      _questions = config.getAllQuestions();
       _guessedNoteMidi = guessedNote.midiNumber;
       _actualNoteMidi = actualNote.midiNumber;
       _isLoading = false;
     });
   }
 
-  Future<void> _loadQuestions() async {
-    try {
-      final yamlString = await rootBundle.loadString('assets/describing_questions.yaml');
-      final yamlData = loadYaml(yamlString);
-      final questionsData = yamlData['questions'] as List;
-      
-      setState(() {
-        _questions = questionsData
-            .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
-            .toList();
-      });
-    } catch (e, stackTrace) {
-      Log.e('Error loading questions', error: e, stackTrace: stackTrace, tag: 'ComparativeStats');
-      setState(() {
-        _questions = [];
-      });
-    }
-  }
+  // Removed _loadQuestions - using GlobalConfigService instead
 
 
   @override
@@ -231,17 +213,13 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
             
             const SizedBox(height: 32),
             
-            // Back to Menu Button
+            // Continue Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
                   // Pop all pages to go back to synesthetic menu
-                  Navigator.of(context).popUntil((route) {
-                    return route.settings.name == '/synesthetic_menu' || 
-                           (route is MaterialPageRoute && route.builder.toString().contains('SynestheticMenuPage')) ||
-                           route.isFirst;
-                  });
+                  Navigator.of(context).pop();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purple,
@@ -252,7 +230,7 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
                   ),
                 ),
                 child: const Text(
-                  'Back to Menu',
+                  'Continue',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -282,8 +260,8 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
     final guessedQuestionStatsRaw = guessedNoteStats?.questions[question.key];
     final actualQuestionStatsRaw = actualNoteStats?.questions[question.key];
     
-    final guessedQuestionStats = guessedQuestionStatsRaw != null ? List<int>.from(guessedQuestionStatsRaw) : null;
-    final actualQuestionStats = actualQuestionStatsRaw != null ? List<int>.from(actualQuestionStatsRaw) : null;
+    final guessedQuestionStats = guessedQuestionStatsRaw != null ? Map<String, int>.from(guessedQuestionStatsRaw) : null;
+    final actualQuestionStats = actualQuestionStatsRaw != null ? Map<String, int>.from(actualQuestionStatsRaw) : null;
     
     final currentAnswer = widget.sessionAnswers[question.key];
 
@@ -311,23 +289,16 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
             const SizedBox(height: 20),
             
             // Options comparison
-            ...question.options.asMap().entries.map((entry) {
-              final index = entry.key;
-              final option = entry.value;
-              
-              final guessedCount = guessedQuestionStats != null && index < guessedQuestionStats.length 
-                  ? guessedQuestionStats[index] 
-                  : 0;
-              final actualCount = actualQuestionStats != null && index < actualQuestionStats.length 
-                  ? actualQuestionStats[index] 
-                  : 0;
+            ...question.options.map((option) {
+              final guessedCount = guessedQuestionStats?[option.key] ?? 0;
+              final actualCount = actualQuestionStats?[option.key] ?? 0;
 
               final total = guessedCount + actualCount;
               
               final guessedPercentage = total > 0 ? guessedCount / total : 0.0;
               final actualPercentage = total > 0 ? actualCount / total : 0.0;
               
-              final isCurrentAnswer = option == currentAnswer;
+              final isCurrentAnswer = option.key == currentAnswer;
               
               // Only show if at least one note has this option selected
               if (guessedCount == 0 && actualCount == 0) {
@@ -343,7 +314,7 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
                     Row(
                       children: [
                         Text(
-                          option,
+                          option.nameEn,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: isCurrentAnswer ? FontWeight.bold : FontWeight.w600,
@@ -373,7 +344,7 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
                     const SizedBox(height: 8),
                     
                     // Comparative bars
-                    Container(
+                    SizedBox(
                       height: 24,
                       width: double.infinity,
                       child: Row(
@@ -429,7 +400,7 @@ class _ComparativeStatsPageState extends State<ComparativeStatsPage> with MidiCl
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

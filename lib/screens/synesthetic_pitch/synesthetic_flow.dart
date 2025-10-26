@@ -6,6 +6,7 @@ import '../../models/user_progress_data.dart';
 import 'synesthetic_menu_page.dart';
 import 'learning_flow.dart';
 import 'personalization_wizard_page.dart';
+import '../../models/app_settings.dart';
 
 /// Manages the synesthetic pitch flow: checks state and shows appropriate page
 /// 
@@ -72,9 +73,9 @@ class SynestheticFlow {
   }
   
   /// Gets the next note that user needs to learn
-  static String? _getNextNoteToLearn(UserProgressData userProgress, Map<String, dynamic> settings) {
-    final synestheticSettings = Map<String, dynamic>.from(settings['synestetic_pitch'] as Map);
-    final startWithNotes = synestheticSettings['start_with_notes'] as int;
+  static String? _getNextNoteToLearn(UserProgressData userProgress, AppSettings settings) {
+    final synestheticSettings = settings.synestheticPitch;
+    final startWithNotes = synestheticSettings.startWithNotes ?? 4;
     
     final learnedNotes = userProgress.synestheticPitch.learnedNotes;
     
@@ -84,11 +85,11 @@ class SynestheticFlow {
     }
     
     // Get the next note to learn
-    final noteSequence = synestheticSettings['note_sequence'] as List<dynamic>;
+    final noteSequence = synestheticSettings.noteSequence ?? [];
     
     // Find first unopened note or first unlearned note
     for (final note in noteSequence) {
-      final noteName = note as String;
+      final noteName = note;
       if (!learnedNotes.contains(noteName)) {
         return noteName;
       }

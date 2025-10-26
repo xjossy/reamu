@@ -2,6 +2,8 @@ import 'logging_service.dart';
 import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
 import '../models/session_settings.dart';
+import '../models/app_settings.dart';
+import '../utils/common.dart';
 
 class SettingsService {
   static SettingsService? _instance;
@@ -12,84 +14,51 @@ class SettingsService {
 
   SettingsService._();
 
-  Map<String, dynamic>? _settings;
+  AppSettings? _settings;
 
-  Future<Map<String, dynamic>> getSettings() async {
+  Future<AppSettings> getSettings() async {
     if (_settings != null) return _settings!;
 
     try {
       final yamlString = await rootBundle.loadString('assets/global_settings.yaml');
       final yamlData = loadYaml(yamlString);
-      _settings = Map<String, dynamic>.from(yamlData);
+      final jsonMap = convertYamlToJson(yamlData);
+      _settings = AppSettings.fromJson(jsonMap);
       return _settings!;
     } catch (e, stackTrace) {
       Log.e('Error loading settings', error: e, stackTrace: stackTrace, tag: 'Settings');
-      return {};
+      rethrow;
     }
   }
 
   Future<int> getGuessQuestionsCount() async {
     final settings = await getSettings();
-    final count = settings['synestetic_pitch']?['guess_questions'] as int?;
-    return count ?? 5; // Default to 5 if not specified
+    return settings.synestheticPitch.guessQuestions; // Default to 5
   }
 
   Future<int> getSessionLengthMinutes() async {
     final settings = await getSettings();
-    final minutes = settings['synestetic_pitch']?['session_length_minutes'] as int?;
-    return minutes ?? 20; // Default to 20 minutes if not specified
+    return settings.synestheticPitch.sessionLengthMinutes; // Default to 20
   }
 
   /// Get morning session settings
   Future<SessionSettings> getMorningSessionSettings() async {
     final settings = await getSettings();
-    final sessionSettings = settings['synestetic_pitch']?['morning_session_settings'] as Map?;
     
-    if (sessionSettings != null) {
-      return SessionSettings.fromJson(Map<String, dynamic>.from(sessionSettings));
-    }
-    
-    // Fallback to default
-    return SessionSettings(
-      scores: 10,
-      penalty: 5,
-      notes: 6,
-    );
+    return settings.synestheticPitch.morningSessionSettings;
   }
 
   /// Get instant session settings
   Future<SessionSettings> getInstantSessionSettings() async {
     final settings = await getSettings();
-    final sessionSettings = settings['synestetic_pitch']?['instant_session_settings'] as Map?;
     
-    if (sessionSettings != null) {
-      return SessionSettings.fromJson(Map<String, dynamic>.from(sessionSettings));
-    }
-    
-    // Fallback to default
-    return SessionSettings(
-      scores: 20,
-      penalty: 5,
-      maxInactivityMinutes: 15,
-      notes: 2,
-    );
+    return settings.synestheticPitch.instantSessionSettings;
   }
 
   /// Get practice session settings
   Future<SessionSettings> getPracticeSessionSettings() async {
     final settings = await getSettings();
-    final sessionSettings = settings['synestetic_pitch']?['practice_session_settings'] as Map?;
     
-    if (sessionSettings != null) {
-      return SessionSettings.fromJson(Map<String, dynamic>.from(sessionSettings));
-    }
-    
-    // Fallback to default
-    return SessionSettings(
-      scores: 3,
-      penalty: 1,
-      lifetimeMinutes: 10,
-      scoredNotes: 1,
-    );
+    return settings.synestheticPitch.practiceSessionSettings;
   }
 }

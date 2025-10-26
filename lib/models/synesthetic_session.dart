@@ -1,5 +1,9 @@
 import 'dart:convert';
+import 'package:json_annotation/json_annotation.dart';
 
+part 'synesthetic_session.g.dart';
+
+@JsonSerializable(explicitToJson: true)
 class SynestheticSession {
   final String id;
   final DateTime startTime;
@@ -36,49 +40,10 @@ class SynestheticSession {
     return remaining.isNotEmpty ? remaining.first : null;
   }
 
-  SynestheticSession copyWith({
-    String? id,
-    DateTime? startTime,
-    DateTime? endTime,
-    List<String>? notesToGuess,
-    List<String>? correctlyGuessed,
-    List<String>? incorrectlyGuessed,
-    Map<String, String>? mistakes,
-  }) {
-    return SynestheticSession(
-      id: id ?? this.id,
-      startTime: startTime ?? this.startTime,
-      endTime: endTime ?? this.endTime,
-      notesToGuess: notesToGuess ?? this.notesToGuess,
-      correctlyGuessed: correctlyGuessed ?? this.correctlyGuessed,
-      incorrectlyGuessed: incorrectlyGuessed ?? this.incorrectlyGuessed,
-      mistakes: mistakes ?? this.mistakes,
-    );
-  }
+  factory SynestheticSession.fromJson(Map<String, dynamic> json) =>
+      _$SynestheticSessionFromJson(json);
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'startTime': startTime.toIso8601String(),
-      'endTime': endTime?.toIso8601String(),
-      'notesToGuess': notesToGuess,
-      'correctlyGuessed': correctlyGuessed,
-      'incorrectlyGuessed': incorrectlyGuessed,
-      'mistakes': mistakes,
-    };
-  }
-
-  factory SynestheticSession.fromJson(Map<String, dynamic> json) {
-    return SynestheticSession(
-      id: json['id'] as String,
-      startTime: DateTime.parse(json['startTime'] as String),
-      endTime: json['endTime'] != null ? DateTime.parse(json['endTime'] as String) : null,
-      notesToGuess: List<String>.from(json['notesToGuess'] as List),
-      correctlyGuessed: List<String>.from(json['correctlyGuessed'] as List? ?? []),
-      incorrectlyGuessed: List<String>.from(json['incorrectlyGuessed'] as List? ?? []),
-      mistakes: Map<String, String>.from(json['mistakes'] as Map? ?? {}),
-    );
-  }
+  Map<String, dynamic> toJson() => _$SynestheticSessionToJson(this);
 
   String toJsonString() => jsonEncode(toJson());
 

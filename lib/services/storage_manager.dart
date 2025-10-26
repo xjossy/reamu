@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:synchronized/synchronized.dart';
 import 'logging_service.dart';
 
 /// Manages storage operations with automatic backups and thread-safe versioning
@@ -9,21 +10,9 @@ class StorageManager {
   final String fileName;
   int _version = 0;
   int? _savedVersion;
-  final Completer<void> _mutex = Completer();
+  final _lock = Lock();
 
-  StorageManager({required this.fileName}) {
-    _mutex.complete(); // Initialize as unlocked
-  }
-
-  /// Acquire lock by waiting for mutex
-  Future<void> _acquireLock() async {
-    await _mutex.future;
-  }
-
-  /// Release lock by creating new completer
-  void _releaseLock() {
-    _mutex.complete();
-  }
+  StorageManager({required this.fileName});
 
   /// Load data from file, falling back to backup if needed
   /// Returns parsed JSON object or throws exception if both fail
@@ -67,52 +56,42 @@ class StorageManager {
   /// Save data asynchronously with automatic backup and thread-safety
   void saveData(Map<String, dynamic> data) {
     final jsonContent = jsonEncode(data);
-    _saveDataAsync(jsonContent, ++_version);
+    unawaited(_saveDataAsync(jsonContent, ++_version));
   }
 
   /// Internal async save with backup and versioning
   Future<void> _saveDataAsync(String jsonContent, int version) async {
     // Run in background without waiting
-    unawaited(
-      () async {
-        try {
-          // Acquire lock
-          await _acquireLock();
-          
-          // Check if this version is already saved
-          if (_savedVersion != null && _savedVersion! >= version) {
-            _releaseLock();
-            return;
-          }
-          
-          // Mark as saving
-          _savedVersion = version;
-          
-          // Perform the actual save
-          final file = await _getFile(fileName);
-          final backupFileName = _getBackupFileName(fileName);
-          final backupFile = await _getFile(backupFileName);
-
-          // Create backup: remove old backup, rename current to backup, save new file
-          if (await file.exists()) {
-            if (await backupFile.exists()) {
-              await backupFile.delete();
-            }
-            await file.rename(backupFile.path);
-          }
-
-          // Write new file
-          await file.writeAsString(jsonContent, flush: true);
-          Log.d('Saved data to $fileName with backup (version: $version)', tag: 'StorageManager');
-          
-          // Release lock
-          _releaseLock();
-        } catch (e, stackTrace) {
-          Log.e('Error saving data', error: e, stackTrace: stackTrace, tag: 'StorageManager');
-          _releaseLock();
+    await _lock.synchronized(() async {
+      try {
+        // Check if this version is already saved
+        if (_savedVersion != null && _savedVersion! >= version) {
+          return;
         }
-      }()
-    );
+        
+        // Mark as saving
+        _savedVersion = version;
+        
+        // Perform the actual save
+        final file = await _getFile(fileName);
+        final backupFileName = _getBackupFileName(fileName);
+        final backupFile = await _getFile(backupFileName);
+
+        // Create backup: remove old backup, rename current to backup, save new file
+        if (await file.exists()) {
+          if (await backupFile.exists()) {
+            await backupFile.delete();
+          }
+          await file.rename(backupFile.path);
+        }
+
+        // Write new file
+        await file.writeAsString(jsonContent, flush: true);
+        Log.d('Saved data to $fileName with backup (version: $version)', tag: 'StorageManager');
+      } catch (e, stackTrace) {
+        Log.e('Error saving data', error: e, stackTrace: stackTrace, tag: 'StorageManager');
+      }
+    });
   }
 
   /// Get backup filename for a given file

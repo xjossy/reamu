@@ -67,16 +67,16 @@ class _PersonalizationWizardPageState extends State<PersonalizationWizardPage> {
   Future<void> _loadSettings() async {
     try {
       final settings = await _settingsService.getSettings();
-      final synestheticSettings = Map<String, dynamic>.from(settings['synestetic_pitch'] as Map);
+      final synestheticSettings = settings.synestheticPitch;
       
       // Load saved personalization if exists
       final progress = await _memoryService.ensureData();
       final personalizationData = progress.synestheticPitch.personalization;
       
       setState(() {
-        _minInstantSessions = synestheticSettings['minumum_instant_sessions'] as int? ?? 3;
-        _maxInstantSessions = synestheticSettings['maximum_instant_sessions'] as int? ?? 15;
-        _defaultInstantSessions = synestheticSettings['default_instant_sessions'] as int? ?? 7;
+        _minInstantSessions = synestheticSettings.minimumInstantSessions ?? 3;
+        _maxInstantSessions = synestheticSettings.maximumInstantSessions ?? 15;
+        _defaultInstantSessions = synestheticSettings.defaultInstantSessions ?? 7;
         
         if (personalizationData != null) {
           final personalization = personalizationData;

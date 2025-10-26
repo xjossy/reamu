@@ -60,6 +60,7 @@ class _LearningFlowNavigator extends StatefulWidget {
 class _LearningFlowNavigatorState extends State<_LearningFlowNavigator> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
+  String _currentRoute = '/intro';
   
   void _onCompleteFlow() {
     // Notify parent that flow completed successfully
@@ -73,21 +74,30 @@ class _LearningFlowNavigatorState extends State<_LearningFlowNavigator> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         
-        final shouldPop = await LearningFlow._showExitConfirmation(context);
-        if (shouldPop && context.mounted) {
+        // Show confirmation only for intermediate routes (describing page)
+        if (_currentRoute == '/describing') {
+          final shouldPop = await LearningFlow._showExitConfirmation(context);
+          if (shouldPop && context.mounted) {
+            Navigator.of(context).pop(false);
+          }
+        } else if (_currentRoute == '/intro') {
+          // Intro page - exit immediately without confirmation
           Navigator.of(context).pop(false);
         }
+        // For statistics page, back button is handled by PageWrapper
       },
       child: Navigator(
         key: _navigatorKey,
         onGenerateRoute: (settings) {
+          _currentRoute = settings.name ?? '/intro';
+          
           switch (settings.name) {
             case '/intro':
               return MaterialPageRoute(
                 builder: (context) => LearningIntroPage(
                   noteName: widget.noteName,
                   onStartLearning: () {
-                    _navigatorKey.currentState!.pushNamed('/describing');
+                    _navigatorKey.currentState!.pushReplacementNamed('/describing');
                   },
                 ),
               );
@@ -102,7 +112,7 @@ class _LearningFlowNavigatorState extends State<_LearningFlowNavigator> {
                     await _memoryService.markNoteAsLearned(widget.noteName);
                     
                     // Navigate to statistics page
-                    _navigatorKey.currentState!.pushNamed('/statistics', arguments: answers);
+                    _navigatorKey.currentState!.pushReplacementNamed('/statistics', arguments: answers);
                   },
                 ),
               );
@@ -119,11 +129,8 @@ class _LearningFlowNavigatorState extends State<_LearningFlowNavigator> {
                 ),
               );
             default:
-              return MaterialPageRoute(
-                builder: (context) => const Scaffold(
-                  body: Center(child: Text('Unknown route')),
-                ),
-              );
+              // Return null to let the back button work properly
+              return null;
           }
         },
         initialRoute: '/intro',

@@ -1,10 +1,22 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'session_settings.g.dart';
+
 /// Represents settings for a session type
+@JsonSerializable(explicitToJson: true)
 class SessionSettings {
   final int scores;
   final int penalty;
+  
+  @JsonKey(name: 'scored_notes')
   final int? scoredNotes;
+  
   final int? notes;
+  
+  @JsonKey(name: 'max_inactivity_minutes')
   final int? maxInactivityMinutes;
+  
+  @JsonKey(name: 'lifetime_minutes')
   final int? lifetimeMinutes;
 
   SessionSettings({
@@ -16,27 +28,10 @@ class SessionSettings {
     this.lifetimeMinutes,
   });
 
-  factory SessionSettings.fromJson(Map<String, dynamic> json) {
-    return SessionSettings(
-      scores: json['scores'] as int,
-      penalty: json['penalty'] as int,
-      scoredNotes: json['scored_notes'] as int?,
-      notes: json['notes'] as int?,
-      maxInactivityMinutes: json['max_inactivity_minutes'] as int?,
-      lifetimeMinutes: json['lifetime_minutes'] as int?,
-    );
-  }
+  factory SessionSettings.fromJson(Map<String, dynamic> json) =>
+      _$SessionSettingsFromJson(json);
 
-  Map<String, dynamic> toJson() {
-    return {
-      'scores': scores,
-      'penalty': penalty,
-      if (scoredNotes != null) 'scored_notes': scoredNotes,
-      if (notes != null) 'notes': notes,
-      if (maxInactivityMinutes != null) 'max_inactivity_minutes': maxInactivityMinutes,
-      if (lifetimeMinutes != null) 'lifetime_minutes': lifetimeMinutes,
-    };
-  }
+  Map<String, dynamic> toJson() => _$SessionSettingsToJson(this);
 }
 
 /// Session type enum
@@ -46,3 +41,8 @@ enum SessionType {
   practice,
 }
 
+String sessionTypeToString(SessionType sessionType) => switch (sessionType) {
+  SessionType.morning => 'Morning Session',
+  SessionType.instant => 'Instant Session',
+  SessionType.practice => 'Practice Session',
+};

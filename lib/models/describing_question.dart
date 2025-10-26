@@ -1,7 +1,29 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'describing_question.g.dart';
+
+/// Represents a single option in a describing question
+@JsonSerializable(explicitToJson: true)
+class QuestionOption {
+  final String key;
+  final String nameEn;
+
+  const QuestionOption({
+    required this.key,
+    required this.nameEn,
+  });
+
+  factory QuestionOption.fromJson(Map<String, dynamic> json) =>
+      _$QuestionOptionFromJson(json);
+
+  Map<String, dynamic> toJson() => _$QuestionOptionToJson(this);
+}
+
+@JsonSerializable(explicitToJson: true)
 class DescribingQuestion {
   final String key;
   final String question;
-  final List<String> options;
+  final List<QuestionOption> options;
 
   const DescribingQuestion({
     required this.key,
@@ -9,33 +31,8 @@ class DescribingQuestion {
     required this.options,
   });
 
-  factory DescribingQuestion.fromJson(Map<String, dynamic> json) {
-    // Parse options - can be either List<String> or List<Map> with 'name' field
-    final optionsRaw = json['options'] as List;
-    final List<String> parsedOptions;
-    
-    if (optionsRaw.isNotEmpty && optionsRaw.first is Map) {
-      // New format: List of dictionaries with 'name' field
-      parsedOptions = optionsRaw
-          .map((option) => (option as Map)['name'] as String)
-          .toList();
-    } else {
-      // Old format: List of strings (backward compatibility)
-      parsedOptions = List<String>.from(optionsRaw);
-    }
-    
-    return DescribingQuestion(
-      key: json['key'] as String,
-      question: json['question'] as String,
-      options: parsedOptions,
-    );
-  }
+  factory DescribingQuestion.fromJson(Map<String, dynamic> json) =>
+      _$DescribingQuestionFromJson(json);
 
-  Map<String, dynamic> toJson() {
-    return {
-      'key': key,
-      'question': question,
-      'options': options,
-    };
-  }
+  Map<String, dynamic> toJson() => _$DescribingQuestionToJson(this);
 }

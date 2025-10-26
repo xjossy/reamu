@@ -1,10 +1,19 @@
 import 'dart:math';
+import 'package:json_annotation/json_annotation.dart';
 import 'active_session.dart';
 import 'session_settings.dart';
 
+part 'session_manager.g.dart';
+
 /// Manages session creation, storage, and retrieval
+@JsonSerializable(explicitToJson: true)
 class SessionManager {
-  final Map<String, SessionData> _sessions = {};
+  @JsonKey(name: 'sessions')
+  final Map<String, SessionData> sessions;
+  
+  SessionManager({
+    Map<String, SessionData>? sessions,
+  }) : sessions = sessions ?? {};
   
   /// Generate a unique session ID
   String _generateSessionId() {
@@ -15,7 +24,7 @@ class SessionManager {
   
   /// Create a new session
   SessionData createSession({
-    required String day,
+    required DateTime day,
     required SessionType type,
     required SessionSettings settings,
     required List<String> learnedNotes,
@@ -35,34 +44,39 @@ class SessionManager {
       lastActivityTime: DateTime.now(),
     );
     
-    _sessions[id] = session;
+    sessions[id] = session;
     return session;
   }
   
   /// Get session by ID
   SessionData? getSessionById(String id) {
-    return _sessions[id];
+    return sessions[id];
   }
   
   /// Save session
   void saveSession(SessionData session) {
-    _sessions[session.id] = session;
+    sessions[session.id] = session;
   }
   
   /// Remove session by ID
   void removeSession(String id) {
-    _sessions.remove(id);
+    sessions.remove(id);
   }
   
   /// Get all sessions for a specific day
   List<SessionData> getSessionsForDay(String day) {
-    return _sessions.values.where((s) => s.day == day).toList();
+    return sessions.values.where((s) => s.day == day).toList();
   }
   
   /// Get internal sessions map (for serialization)
   Map<String, SessionData> getSessions() {
-    return _sessions;
+    return sessions;
   }
+  
+  factory SessionManager.fromJson(Map<String, dynamic> json) =>
+      _$SessionManagerFromJson(json);
+
+  Map<String, dynamic> toJson() => _$SessionManagerToJson(this);
   
   /// Choose notes to guess from learned notes
   static List<String> _chooseNotesToGuess(

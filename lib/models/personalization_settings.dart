@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:json_annotation/json_annotation.dart';
 
+part 'personalization_settings.g.dart';
+
+@JsonSerializable(explicitToJson: true)
 class PersonalizationSettings {
+  @JsonKey(name: 'morning_session_time')
   final String morningSessionTime; // Format: "HH:mm" (24-hour)
+  
+  @JsonKey(name: 'daylight_duration_hours')
   final double daylightDurationHours; // 8-16 hours (with 0.25 precision)
+  
+  @JsonKey(name: 'instant_sessions_per_day')
   final int instantSessionsPerDay; // From settings: minimum to maximum
+  
+  @JsonKey(name: 'is_completed')
   final bool isCompleted;
+  
+  @JsonKey(name: 'completed_at')
   final DateTime? completedAt; // Timestamp when personalization was first completed
 
   PersonalizationSettings({
@@ -15,27 +28,10 @@ class PersonalizationSettings {
     this.completedAt,
   });
 
-  factory PersonalizationSettings.fromJson(Map<String, dynamic> json) {
-    return PersonalizationSettings(
-      morningSessionTime: json['morning_session_time'] as String? ?? '08:00',
-      daylightDurationHours: (json['daylight_duration_hours'] as num?)?.toDouble() ?? 12.0,
-      instantSessionsPerDay: json['instant_sessions_per_day'] as int? ?? 7,
-      isCompleted: json['is_completed'] as bool? ?? false,
-      completedAt: json['completed_at'] != null 
-          ? DateTime.parse(json['completed_at'] as String)
-          : null,
-    );
-  }
+  factory PersonalizationSettings.fromJson(Map<String, dynamic> json) =>
+      _$PersonalizationSettingsFromJson(json);
 
-  Map<String, dynamic> toJson() {
-    return {
-      'morning_session_time': morningSessionTime,
-      'daylight_duration_hours': daylightDurationHours,
-      'instant_sessions_per_day': instantSessionsPerDay,
-      'is_completed': isCompleted,
-      'completed_at': completedAt?.toIso8601String(),
-    };
-  }
+  Map<String, dynamic> toJson() => _$PersonalizationSettingsToJson(this);
 
   PersonalizationSettings copyWith({
     String? morningSessionTime,

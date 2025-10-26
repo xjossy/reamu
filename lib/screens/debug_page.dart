@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/debug_service.dart';
+import 'dart:convert';
+import '../services/global_memory_service.dart';
 import '../core/debug_config.dart';
 
 class DebugPage extends StatefulWidget {
@@ -11,28 +12,41 @@ class DebugPage extends StatefulWidget {
 }
 
 class _DebugPageState extends State<DebugPage> {
-  final DebugService _debugService = DebugService.instance;
-  Map<String, dynamic> _userData = {};
+  final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
+  Map<String, dynamic> _progressData = {};
   bool _isLoading = true;
-  String _selectedTab = 'overview';
+  String _selectedTab = '';
+  List<String> _tabs = [];
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadProgressData();
   }
 
-  Future<void> _loadUserData() async {
+  Future<void> _loadProgressData() async {
     setState(() {
       _isLoading = true;
     });
 
-    final data = await _debugService.getAllUserData();
-    
-    setState(() {
-      _userData = data;
-      _isLoading = false;
-    });
+    try {
+      final progress = await _memoryService.ensureData();
+      final data = progress.toJson();
+      
+      setState(() {
+        _progressData = data;
+        _tabs = data.keys.toList();
+        _selectedTab = _tabs.isNotEmpty ? _tabs.first : '';
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _progressData = {'error': e.toString()};
+        _tabs = ['error'];
+        _selectedTab = 'error';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -49,19 +63,19 @@ class _DebugPageState extends State<DebugPage> {
     return Scaffold(
       backgroundColor: Colors.grey[900],
       appBar: AppBar(
-        title: const Text('Debug Information'),
+        title: const Text('Memory Service Debug'),
         backgroundColor: Colors.grey[800],
         foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadUserData,
-            tooltip: 'Refresh Data',
+            onPressed: _loadProgressData,
+            tooltip: 'Refresh',
           ),
           IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: _exportData,
-            tooltip: 'Export Data',
+            icon: const Icon(Icons.copy),
+            onPressed: _copyToClipboard,
+            tooltip: 'Copy JSON',
           ),
         ],
       ),
@@ -75,281 +89,289 @@ class _DebugPageState extends State<DebugPage> {
                 ),
               ],
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _printToConsole,
-        backgroundColor: Colors.orange,
-        child: const Icon(Icons.print, color: Colors.white),
-      ),
     );
   }
 
   Widget _buildTabBar() {
     return Container(
       color: Colors.grey[800],
+      height: 50,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: [
-            _buildTab('Overview', 'overview'),
-            _buildTab('Raw Data', 'raw'),
-            _buildTab('Sessions', 'sessions'),
-            _buildTab('Scores', 'scores'),
-            _buildTab('Files', 'files'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTab(String title, String tabId) {
-    final isSelected = _selectedTab == tabId;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedTab = tabId),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.orange : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          title,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.grey[300],
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
+          children: _tabs.map((tab) {
+            final isSelected = _selectedTab == tab;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedTab = tab),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.orange : Colors.transparent,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isSelected ? Colors.orange : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  tab,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey[300],
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );
   }
 
   Widget _buildContent() {
-    switch (_selectedTab) {
-      case 'overview':
-        return _buildOverview();
-      case 'raw':
-        return _buildRawData();
-      case 'sessions':
-        return _buildSessions();
-      case 'scores':
-        return _buildScores();
-      case 'files':
-        return _buildFiles();
-      default:
-        return _buildOverview();
+    if (_selectedTab.isEmpty || !_progressData.containsKey(_selectedTab)) {
+      return const Center(
+        child: Text('No data', style: TextStyle(color: Colors.white)),
+      );
+    }
+
+    final tabData = _progressData[_selectedTab];
+    if (tabData is Map<String, dynamic>) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: _JsonTreeViewer(data: tabData),
+      );
+    } else {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Text(
+          tabData.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'monospace',
+          ),
+        ),
+      );
     }
   }
 
-  Widget _buildOverview() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildInfoCard('User Progress', [
-            'Started: ${_userData['user_progress']?['synestetic_pitch']?['started'] ?? 'N/A'}',
-            'Opened Notes: ${_userData['user_progress']?['synestetic_pitch']?['opened_notes']?.length ?? 0}',
-            'Learned Notes: ${_userData['user_progress']?['synestetic_pitch']?['leaned_notes']?.length ?? 0}',
-            'Level: ${_userData['current_level'] ?? 'N/A'}',
-          ]),
-          const SizedBox(height: 16),
-          _buildInfoCard('Current Session', [
-            'Session ID: ${_userData['current_session']?['id'] ?? 'None'}',
-            'Total Notes: ${_userData['current_session']?['notesToGuess']?.length ?? 0}',
-            'Completed: ${_userData['current_session']?['completedNotes'] ?? 0}',
-            'Correct: ${_userData['current_session']?['correctlyGuessed']?.length ?? 0}',
-            'Incorrect: ${_userData['current_session']?['incorrectlyGuessed']?.length ?? 0}',
-          ]),
-          const SizedBox(height: 16),
-          _buildInfoCard('Sessions History', [
-            'Total Sessions: ${_userData['sessions']?.length ?? 0}',
-            'Session Length: ${_userData['session_length'] ?? 'N/A'} minutes',
-          ]),
-        ],
-      ),
+  void _copyToClipboard() {
+    if (_selectedTab.isEmpty) return;
+    
+    final tabData = _progressData[_selectedTab];
+    final jsonString = tabData is Map
+        ? const JsonEncoder.withIndent('  ').convert(tabData)
+        : tabData.toString();
+    
+    Clipboard.setData(ClipboardData(text: jsonString));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$_selectedTab data copied to clipboard')),
+    );
+  }
+}
+
+/// Recursive JSON tree viewer widget
+class _JsonTreeViewer extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final int level;
+
+  const _JsonTreeViewer({
+    required this.data,
+    this.level = 0,
+  });
+
+  @override
+  State<_JsonTreeViewer> createState() => _JsonTreeViewerState();
+}
+
+class _JsonTreeViewerState extends State<_JsonTreeViewer> {
+  late Map<String, bool> _expandedState;
+
+  @override
+  void initState() {
+    super.initState();
+    _expandedState = {};
+    for (final key in widget.data.keys) {
+      _expandedState[key] = widget.level < 2; // Auto-expand first 2 levels
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: widget.data.entries.map((entry) {
+        return _buildEntry(entry.key, entry.value);
+      }).toList(),
     );
   }
 
-  Widget _buildRawData() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ElevatedButton(
-                onPressed: _copyToClipboard,
-                child: const Text('Copy to Clipboard'),
-              ),
-              const SizedBox(width: 16),
-              ElevatedButton(
-                onPressed: _printToConsole,
-                child: const Text('Print to Console'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[600]!),
-            ),
-            child: SelectableText(
-              _debugService.formatJsonForDisplay(_userData),
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildEntry(String key, dynamic value) {
+    final isExpanded = _expandedState[key] ?? false;
+    final isMap = value is Map<String, dynamic>;
+    final isList = value is List;
+    final isExpandable = isMap || isList;
 
-  Widget _buildSessions() {
-    final sessions = _userData['sessions'] as List<dynamic>? ?? [];
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: sessions.length,
-      itemBuilder: (context, index) {
-        final session = sessions[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    if (!isExpandable) {
+      return Padding(
+        padding: EdgeInsets.only(left: widget.level * 16.0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: RichText(
+            textAlign: TextAlign.left,
+            text: TextSpan(
               children: [
-                Text('Session ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                Text('ID: ${session['id']}', style: const TextStyle(color: Colors.white)),
-                Text('Start: ${session['startTime']}', style: const TextStyle(color: Colors.white)),
-                Text('End: ${session['endTime'] ?? 'Not completed'}', style: const TextStyle(color: Colors.white)),
-                Text('Notes: ${session['notesToGuess']?.length ?? 0}', style: const TextStyle(color: Colors.white)),
-                Text('Correct: ${session['correctlyGuessed']?.length ?? 0}', style: const TextStyle(color: Colors.white)),
-                Text('Incorrect: ${session['incorrectlyGuessed']?.length ?? 0}', style: const TextStyle(color: Colors.white)),
+                TextSpan(
+                  text: key,
+                  style: const TextStyle(
+                    color: Colors.cyan,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const TextSpan(
+                  text: ': ',
+                  style: TextStyle(color: Colors.white, fontFamily: 'monospace'),
+                ),
+                TextSpan(
+                  text: _formatValue(value),
+                  style: TextStyle(
+                    color: _getValueColor(value),
+                    fontFamily: 'monospace',
+                  ),
+                ),
               ],
             ),
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    }
 
-  Widget _buildScores() {
-    final noteScores = _userData['note_scores'] as Map<String, dynamic>? ?? {};
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: noteScores.length,
-      itemBuilder: (context, index) {
-        final entry = noteScores.entries.elementAt(index);
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: Icon(
-              (entry.value as int) >= 0 ? Icons.trending_up : Icons.trending_down,
-              color: (entry.value as int) >= 0 ? Colors.green : Colors.red,
-            ),
-            title: Text(entry.key),
-            subtitle: Text('${entry.value} points'),
-            trailing: Text(
-              (entry.value as int) >= 0 ? '+${entry.value}' : '${entry.value}',
-              style: TextStyle(
-                color: (entry.value as int) >= 0 ? Colors.green : Colors.red,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFiles() {
-    final files = _userData['raw_files'] as Map<String, dynamic>? ?? {};
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: files.length,
-      itemBuilder: (context, index) {
-        final entry = files.entries.elementAt(index);
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ExpansionTile(
-            title: Text(entry.key),
-            subtitle: Text('${entry.value.toString().length} characters'),
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SelectableText(
-                  entry.value.toString(),
+    return Container(
+      margin: EdgeInsets.only(left: widget.level * 16.0, top: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[850],
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: (value) {
+            setState(() {
+              _expandedState[key] = value;
+            });
+          },
+          title: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: key,
                   style: const TextStyle(
+                    color: Colors.cyan,
                     fontFamily: 'monospace',
-                    fontSize: 10,
-                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildInfoCard(String title, List<String> items) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+                TextSpan(
+                  text: isMap
+                      ? ' (${value.length} items)'
+                      : ' (${value.length} items)',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            ...items.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(item),
-            )),
+          ),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+          children: [
+            if (isMap)
+              _JsonTreeViewer(
+                data: value,
+                level: widget.level + 1,
+              )
+            else
+              ...value.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                return Padding(
+                  padding: EdgeInsets.only(
+                    left: (widget.level + 1) * 16.0,
+                    top: 4,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: RichText(
+                      textAlign: TextAlign.left,
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '[$index]',
+                            style: const TextStyle(
+                              color: Colors.yellow,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const TextSpan(
+                            text: ': ',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          TextSpan(
+                            text: _formatValue(item),
+                            style: TextStyle(
+                              color: _getValueColor(item),
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
           ],
         ),
       ),
     );
   }
 
-  void _copyToClipboard() {
-    final jsonString = _debugService.formatJsonForDisplay(_userData);
-    Clipboard.setData(ClipboardData(text: jsonString));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Data copied to clipboard')),
-    );
+  String _formatValue(dynamic value) {
+    if (value == null) {
+      return 'null';
+    } else if (value is bool) {
+      return value.toString();
+    } else if (value is num) {
+      return value.toString();
+    } else if (value is String) {
+      return '"$value"';
+    } else if (value is List) {
+      return '[List (${value.length})]';
+    } else if (value is Map) {
+      return '{Map (${value.length})}';
+    }
+    return value.toString();
   }
 
-  void _printToConsole() {
-    _debugService.printAllData();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Data printed to console')),
-    );
-  }
-
-  void _exportData() {
-    _debugService.exportUserData();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Data exported to debug_export.json')),
-    );
+  Color _getValueColor(dynamic value) {
+    if (value == null) {
+      return Colors.grey;
+    } else if (value is bool) {
+      return Colors.orange;
+    } else if (value is num) {
+      return Colors.lightGreen;
+    } else if (value is String) {
+      return Colors.lightBlue;
+    }
+    return Colors.white;
   }
 }

@@ -85,10 +85,32 @@ class _GuessingFlowNavigator extends StatefulWidget {
 class _GuessingFlowNavigatorState extends State<_GuessingFlowNavigator> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   List<String>? _selectedQuestions;
+  String _currentRoute = '/intro';
   
   void _onCompleteFlow() {
     // Notify parent that flow completed successfully
     Navigator.of(context).pop(true);
+  }
+  
+  Future<bool> _showExitConfirmation(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Exit Guessing?'),
+        content: const Text('Are you sure you want to exit? Your progress will not be saved.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Stay in Guessing'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
   
   @override
@@ -98,14 +120,23 @@ class _GuessingFlowNavigatorState extends State<_GuessingFlowNavigator> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         
-        // Allow exit without confirmation for guessing flow
-        if (context.mounted) {
+        // Show confirmation for intermediate routes (describing and selection pages)
+        if (_currentRoute == '/describing' || _currentRoute == '/selection') {
+          final shouldPop = await _showExitConfirmation(context);
+          if (shouldPop && context.mounted) {
+            Navigator.of(context).pop(false);
+          }
+        } else if (_currentRoute == '/intro') {
+          // Intro page - exit immediately without confirmation
           Navigator.of(context).pop(false);
         }
+        // For stats pages, back button is handled by PageWrapper
       },
       child: Navigator(
         key: _navigatorKey,
         onGenerateRoute: (settings) {
+          _currentRoute = settings.name ?? '/intro';
+          
           switch (settings.name) {
             case '/intro':
               return MaterialPageRoute(
@@ -115,7 +146,7 @@ class _GuessingFlowNavigatorState extends State<_GuessingFlowNavigator> {
                   onStartGuessing: () async {
                     // Get random questions and navigate to describing page
                     final questions = await _getRandomQuestions();
-                    _navigatorKey.currentState!.pushNamed('/describing', arguments: questions);
+                    _navigatorKey.currentState!.pushReplacementNamed('/describing', arguments: questions);
                   },
                 ),
               );
@@ -128,7 +159,7 @@ class _GuessingFlowNavigatorState extends State<_GuessingFlowNavigator> {
                   showNoteName: false,
                   doNext: (answers) async {
                     // Navigate to note selection page
-                    _navigatorKey.currentState!.pushNamed('/selection', arguments: answers);
+                    _navigatorKey.currentState!.pushReplacementNamed('/selection', arguments: answers);
                   },
                 ),
               );
@@ -144,9 +175,9 @@ class _GuessingFlowNavigatorState extends State<_GuessingFlowNavigator> {
                     
                     // Navigate to appropriate stats page
                     if (isCorrect) {
-                      _navigatorKey.currentState!.pushNamed('/correct', arguments: answers);
+                      _navigatorKey.currentState!.pushReplacementNamed('/correct', arguments: answers);
                     } else {
-                      _navigatorKey.currentState!.pushNamed('/incorrect', arguments: {
+                      _navigatorKey.currentState!.pushReplacementNamed('/incorrect', arguments: {
                         'guessedNote': guessedNote,
                         'answers': answers,
                       });
@@ -183,11 +214,8 @@ class _GuessingFlowNavigatorState extends State<_GuessingFlowNavigator> {
                 ),
               );
             default:
-              return MaterialPageRoute(
-                builder: (context) => const Scaffold(
-                  body: Center(child: Text('Unknown route')),
-                ),
-              );
+              // Return null to let the back button work properly
+              return null;
           }
         },
         initialRoute: '/intro',

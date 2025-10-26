@@ -9,6 +9,8 @@ import '../models/personalization_settings.dart';
 import '../models/active_session.dart';
 import '../models/session_settings.dart';
 import '../models/user_progress_data.dart';
+import '../models/app_settings.dart';
+import '../models/describing_question.dart';
 
 class GlobalMemoryService {
   static const String _fileName = 'user_progress.json';
@@ -52,6 +54,8 @@ class GlobalMemoryService {
     _storageManager.saveData(_data!.toJson());
   }
 
+  void save() => _saveData();
+
   /// Create default user progress data
   UserProgressData _createDefaultData() {
     return UserProgressData(
@@ -88,42 +92,8 @@ class GlobalMemoryService {
 
   // ==================== NOTE STATISTICS ====================
 
-  Future<void> updateNotesStatistics(String noteName, Map<String, String> answers) async {
-    final data = await ensureData();
-    final config = await _configService.value();
 
-    // Initialize note statistics if not exists
-    if (!data.synestheticPitch.noteStatistics.containsKey(noteName)) {
-      data.synestheticPitch.noteStatistics[noteName] = NoteStatistics(questions: {});
-    }
-
-    final noteStats = data.synestheticPitch.noteStatistics[noteName]!;
-    
-    for (final answer in answers.entries) {
-      final question = config.getQuestion(answer.key);
-      if (question == null) continue;
-
-      if (!noteStats.questions.containsKey(answer.key)) {
-        noteStats.questions[answer.key] = List.filled(question.options.length, 0);
-      }
-
-      final answerIndex = question.options.indexOf(answer.value);
-      if (answerIndex >= 0) {
-        if (answerIndex >= noteStats.questions[answer.key]!.length) {
-          final missingCount = answerIndex - noteStats.questions[answer.key]!.length + 1;
-          noteStats.questions[answer.key]!.addAll(List.filled(missingCount, 0));
-        }
-        noteStats.questions[answer.key]![answerIndex]++;
-      }
-    }
-
-    _saveData();
-  }
-
-  Future<void> updateNoteStatistics(String noteName, String questionKey, String answer) async {
-    final data = await ensureData();
-    final config = await _configService.value();
-
+  void _updateNoteStatisticsImpl(ConfigValue config, UserProgressData data, String noteName, String questionKey, String answer) async {
     // Initialize note statistics if not exists
     if (!data.synestheticPitch.noteStatistics.containsKey(noteName)) {
       data.synestheticPitch.noteStatistics[noteName] = NoteStatistics(questions: {});
@@ -134,18 +104,49 @@ class GlobalMemoryService {
 
     if (question == null) return;
 
+    // Initialize question statistics map if not exists
     if (!noteStats.questions.containsKey(questionKey)) {
-      noteStats.questions[questionKey] = List.filled(question.options.length, 0);
+      noteStats.questions[questionKey] = {};
+      // Initialize all option keys with 0 count
+      for (final option in question.options) {
+        noteStats.questions[questionKey]![option.key] = 0;
+      }
     }
 
-    final answerIndex = question.options.indexOf(answer);
-    if (answerIndex >= 0) {
-      if (answerIndex >= noteStats.questions[questionKey]!.length) {
-        final missingCount = answerIndex - noteStats.questions[questionKey]!.length + 1;
-        noteStats.questions[questionKey]!.addAll(List.filled(missingCount, 0));
-      }
-      noteStats.questions[questionKey]![answerIndex]++;
+    // Find the option key for the given answer
+    QuestionOption? foundOption;
+    try {
+      foundOption = question.options.firstWhere(
+        (opt) => opt.key == answer,
+      );
+    } catch (e) {
+      // Option not found
+      foundOption = null;
     }
+
+    if (foundOption != null) {
+      // Increment the count for this option key
+      noteStats.questions[questionKey]![foundOption.key] = 
+          (noteStats.questions[questionKey]![foundOption.key] ?? 0) + 1;
+    }
+  }
+
+  Future<void> updateNotesStatistics(String noteName, Map<String, String> answers) async {
+    final data = await ensureData();
+    final config = await _configService.value();
+    
+    for (final answer in answers.entries) {
+      _updateNoteStatisticsImpl(config, data, noteName, answer.key, answer.value);
+    }
+
+    _saveData();
+  }
+
+  Future<void> updateNoteStatistics(String noteName, String questionKey, String answer) async {
+    final data = await ensureData();
+    final config = await _configService.value();
+
+    _updateNoteStatisticsImpl(config, data, noteName, questionKey, answer);
 
     _saveData();
   }
@@ -155,7 +156,7 @@ class GlobalMemoryService {
   Future<void> updateNoteScore(String noteName, int scoreChange) async {
     final data = await ensureData();
     final settings = await _settingsService.getSettings();
-    final maxScore = settings['synestetic_pitch']['maximum_note_score'] as int;
+    final maxScore = settings.synestheticPitch.maximumNoteScore;
     
     if (!data.synestheticPitch.noteScores.containsKey(noteName)) {
       data.synestheticPitch.noteScores[noteName] = 0;
@@ -211,7 +212,7 @@ class GlobalMemoryService {
     }
 
     final settings = await _settingsService.getSettings();
-    final startWithNotes = settings['synestetic_pitch']['start_with_notes'] as int;
+    final startWithNotes = settings.synestheticPitch.startWithNotes;
 
     if (learnedNotes.length < startWithNotes) {
       Log.d('User has not learned enough notes (${learnedNotes.length}/$startWithNotes)', tag: 'Memory');
@@ -238,7 +239,7 @@ class GlobalMemoryService {
 
   Future<void> _createInitialDayProgress(PersonalizationSettings settings) async {
     final now = DateTime.now();
-    final morningSessionTimestamp = _computeMorningSessionTimestamp(settings);
+    final morningSessionTimestamp = _computeMorningSessionTimestamp(settings, now);
     final instantSessionTimestamps = _computeInstantSessionTimestamps(morningSessionTimestamp, settings, now);
 
     final dayProgress = DayProgress(
@@ -255,11 +256,12 @@ class GlobalMemoryService {
   }
 
   Future<void> _createBlankDayProgress(PersonalizationSettings settings) async {
-    final morningSessionTimestamp = _computeMorningSessionTimestamp(settings);
+    final now = DateTime.now();
+    final morningSessionTimestamp = _computeMorningSessionTimestamp(settings, now);
     final instantSessionTimestamps = _computeInstantSessionTimestamps(
       morningSessionTimestamp,
       settings,
-      DateTime.now(),
+      now,
     );
 
     final dayProgress = DayProgress(
@@ -275,8 +277,7 @@ class GlobalMemoryService {
     Log.i('Created blank day_progress', tag: 'Memory');
   }
 
-  DateTime _computeMorningSessionTimestamp(PersonalizationSettings settings) {
-    final now = DateTime.now();
+  DateTime _computeMorningSessionTimestamp(PersonalizationSettings settings, DateTime now) {
     final morningTime = settings.morningTime;
     
     DateTime candidateTimestamp = DateTime(
@@ -389,13 +390,10 @@ class GlobalMemoryService {
     DayProgress dayProgress,
     SessionType type,
     List<String> learnedNotes,
-    Map<String, dynamic> settings,
+    AppSettings appSettings,
     {int? instantSessionNumber}
   ) async {
-    final settingsKey = '${type.name}_session_settings';
-    final sessionSettings = SessionSettings.fromJson(
-      Map<String, dynamic>.from(settings['synestetic_pitch'][settingsKey] as Map)
-    );
+    final sessionSettings = _getSessionSettingsForType(type, appSettings);
 
     return dayProgress.createAndSaveSession(
       type,
@@ -403,6 +401,16 @@ class GlobalMemoryService {
       learnedNotes,
       instantSessionNumber: instantSessionNumber,
     );
+  }
+
+  /// Get appropriate session settings based on session type
+  SessionSettings _getSessionSettingsForType(SessionType type, AppSettings appSettings) {
+    final pitchSettings = appSettings.synestheticPitch;
+    return switch (type) {
+      SessionType.morning => pitchSettings.morningSessionSettings,
+      SessionType.instant => pitchSettings.instantSessionSettings,
+      SessionType.practice => pitchSettings.practiceSessionSettings
+    };
   }
 
   Future<void> completeSessionSuccessfully(ActiveSession session) async {
@@ -420,8 +428,8 @@ class GlobalMemoryService {
       }
       dayProgress.activeInstantSessionId = null;
     }
-
-    await saveDayProgress(dayProgress);
+    
+    save();
   }
 
   // ==================== PERSONALIZATION ====================

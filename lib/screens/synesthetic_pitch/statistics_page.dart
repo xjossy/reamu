@@ -211,12 +211,7 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
               child: ElevatedButton(
                 onPressed: () {
                   // Pop back to synesthetic menu (mode menu)
-                  Navigator.of(context).popUntil((route) {
-                    // Keep popping until we find SynestheticMenuPage or reach the main menu
-                    return route.settings.name == '/synesthetic_menu' || 
-                           (route is MaterialPageRoute && route.builder.toString().contains('SynestheticMenuPage')) ||
-                           route.isFirst;
-                  });
+                  Navigator.of(context).pop();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.teal,
@@ -244,7 +239,7 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
   Widget _buildQuestionStats(DescribingQuestion question) {
     final noteStats = _userProgress?.synestheticPitch.noteStatistics[widget.selectedNote];
     final questionStatsRaw = noteStats?.questions[question.key];
-    final questionStats = questionStatsRaw != null ? List<int>.from(questionStatsRaw) : null;
+    final questionStats = questionStatsRaw != null ? Map<String, int>.from(questionStatsRaw) : null;
     
     // Get current session answer if this is from a learning session
     final currentAnswer = widget.sessionAnswers?[question.key];
@@ -272,17 +267,14 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
             const SizedBox(height: 16),
             
             // Progress bars for each option (filter out options with 0 count)
-            ...question.options.asMap().entries.where((entry) {
-              final index = entry.key;
-              final count = questionStats != null && index < questionStats.length ? questionStats[index] : 0;
+            ...question.options.where((option) {
+              final count = questionStats?[option.key] ?? 0;
               return count > 0; // Only show options that have been selected at least once
-            }).map((entry) {
-              final index = entry.key;
-              final option = entry.value;
-              final count = questionStats != null && index < questionStats.length ? questionStats[index] : 0;
-              final total = questionStats?.reduce((a, b) => a + b) ?? 0;
+            }).map((option) {
+              final count = questionStats?[option.key] ?? 0;
+              final total = questionStats?.values.fold<int>(0, (sum, val) => sum + val) ?? 0;
               final percentage = total > 0 ? count / total : 0.0;
-              final isCurrentAnswer = option == currentAnswer;
+              final isCurrentAnswer = option.key == currentAnswer;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -293,7 +285,7 @@ class _StatisticsPageState extends State<StatisticsPage> with MidiCleanupMixin {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          option,
+                          option.nameEn,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: isCurrentAnswer ? FontWeight.bold : FontWeight.w500,

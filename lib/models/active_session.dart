@@ -1,16 +1,55 @@
+import 'package:json_annotation/json_annotation.dart';
 import 'session_settings.dart';
 
+part 'active_session.g.dart';
+
+/// Represents a single guess made during a session
+@JsonSerializable(explicitToJson: true)
+class Guess {
+  @JsonKey(name: 'timestamp')
+  final DateTime timestamp;
+  
+  final String note;
+  
+  @JsonKey(name: 'choosed_note')
+  final String choosedNote;
+  
+  Guess({
+    required this.timestamp,
+    required this.note,
+    required this.choosedNote,
+  });
+
+  factory Guess.fromJson(Map<String, dynamic> json) => _$GuessFromJson(json);
+
+  Map<String, dynamic> toJson() => _$GuessToJson(this);
+
+  /// Check if this guess is correct
+  bool get isCorrect => note == choosedNote;
+}
+
 /// Represents session data stored persistently
+@JsonSerializable(explicitToJson: true)
 class SessionData {
   final String id; // Unique session identifier
-  final String day; // Day identifier from DayProgress
+  final DateTime day; // Day identifier from DayProgress
+  @JsonKey(unknownEnumValue: SessionType.practice)
   final SessionType type;
   final SessionSettings settings;
+  
+  @JsonKey(name: 'notes_to_guess')
   final List<String>? notesToGuess;
+  
+  @JsonKey(name: 'start_time')
   final DateTime startTime;
-  final DateTime? lastActivityTime;
-  final Map<String, bool> guesses; // Map of note -> isCorrect
-  final int currentNoteIndex;
+  
+  @JsonKey(name: 'last_activity_time')
+  DateTime? lastActivityTime;
+  
+  final List<Guess> guesses;
+  
+  @JsonKey(name: 'current_note_index')
+  int currentNoteIndex;
 
   SessionData({
     required this.id,
@@ -20,63 +59,14 @@ class SessionData {
     this.notesToGuess,
     required this.startTime,
     this.lastActivityTime,
-    Map<String, bool>? guesses,
+    List<Guess>? guesses,
     this.currentNoteIndex = 0,
-  }) : guesses = guesses ?? {};
+  }) : guesses = guesses ?? [];
 
-  factory SessionData.fromJson(Map<String, dynamic> json) {
-    // Handle guesses map with proper type conversion
-    final guessesMap = <String, bool>{};
-    if (json['guesses'] != null) {
-      final guesses = json['guesses'] as Map;
-      for (final entry in guesses.entries) {
-        final key = entry.key as String;
-        final value = entry.value;
-        // Convert to bool (handles bool, int 0/1, string "true"/"false")
-        if (value is bool) {
-          guessesMap[key] = value;
-        } else if (value is int) {
-          guessesMap[key] = value != 0;
-        } else if (value is String) {
-          guessesMap[key] = value.toLowerCase() == 'true';
-        } else {
-          guessesMap[key] = false;
-        }
-      }
-    }
-    
-    return SessionData(
-      id: json['id'] as String,
-      day: json['day'] as String,
-      type: SessionType.values.firstWhere(
-        (e) => e.name == json['type'] as String,
-      ),
-      settings: SessionSettings.fromJson(
-        Map<String, dynamic>.from(json['settings'] as Map),
-      ),
-      notesToGuess: json['notes_to_guess'] != null ? List<String>.from(json['notes_to_guess'] as List) : null,
-      startTime: DateTime.parse(json['start_time'] as String),
-      lastActivityTime: json['last_activity_time'] != null
-          ? DateTime.parse(json['last_activity_time'] as String)
-          : null,
-      guesses: guessesMap,
-      currentNoteIndex: json['current_note_index'] as int? ?? 0,
-    );
-  }
+  factory SessionData.fromJson(Map<String, dynamic> json) =>
+      _$SessionDataFromJson(json);
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'day': day,
-      'type': type.name,
-      'settings': settings.toJson(),
-      'notes_to_guess': notesToGuess,
-      'start_time': startTime.toIso8601String(),
-      'last_activity_time': lastActivityTime?.toIso8601String(),
-      'guesses': guesses,
-      'current_note_index': currentNoteIndex,
-    };
-  }
+  Map<String, dynamic> toJson() => _$SessionDataToJson(this);
 
   /// Get the current note to guess
   String? get currentNote {
@@ -89,8 +79,8 @@ class SessionData {
   /// Get total score
   int get totalScore {
     int score = 0;
-    for (final entry in guesses.entries) {
-      if (entry.value) {
+    for (final guess in guesses) {
+      if (guess.isCorrect) {
         score += settings.scores;
       } else {
         score -= settings.penalty;
@@ -100,10 +90,14 @@ class SessionData {
   }
 
   /// Get number of correctly guessed notes
-  int get correctCount => guesses.values.where((v) => v).length;
+  int get correctCount {
+    return guesses.where((g) => g.isCorrect).length;
+  }
 
   /// Get number of incorrectly guessed notes
-  int get incorrectCount => guesses.values.where((v) => !v).length;
+  int get incorrectCount {
+    return guesses.where((g) => !g.isCorrect).length;
+  }
 
   /// Check if session is completed successfully
   bool get isCompletedSuccessfully {
@@ -141,31 +135,6 @@ class SessionData {
   /// Check if session should be ended (timeout)
   bool shouldEnd() {
     return isInactivityTimeout() || isLifetimeTimeout();
-  }
-
-  /// Create a copy with updated values
-  SessionData copyWith({
-    String? id,
-    String? day,
-    SessionType? type,
-    SessionSettings? settings,
-    List<String>? notesToGuess,
-    DateTime? startTime,
-    DateTime? lastActivityTime,
-    Map<String, bool>? guesses,
-    int? currentNoteIndex,
-  }) {
-    return SessionData(
-      id: id ?? this.id,
-      day: day ?? this.day,
-      type: type ?? this.type,
-      settings: settings ?? this.settings,
-      notesToGuess: notesToGuess ?? this.notesToGuess,
-      startTime: startTime ?? this.startTime,
-      lastActivityTime: lastActivityTime ?? this.lastActivityTime,
-      guesses: guesses ?? this.guesses,
-      currentNoteIndex: currentNoteIndex ?? this.currentNoteIndex,
-    );
   }
 }
 

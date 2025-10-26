@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
 import '../models/describing_question.dart';
 import 'logging_service.dart';
+import '../utils/common.dart';
 
 class ConfigValue {
   final List<DescribingQuestion> questions;
@@ -45,7 +46,8 @@ class GlobalConfigService {
     try {
       final yamlString = await rootBundle.loadString('assets/describing_questions.yaml');
       final yamlData = loadYaml(yamlString);
-      final questionsData = yamlData['questions'] as List;
+      final jsonData = convertYamlToJson(yamlData) as Map<String, dynamic>;
+      final questionsData = jsonData['questions'] as List;
       
       final questions = questionsData
           .map((q) => DescribingQuestion.fromJson(Map<String, dynamic>.from(q)))
@@ -62,8 +64,7 @@ class GlobalConfigService {
       return _value!;
     } catch (e, stackTrace) {
       Log.e('Error loading describing questions', error: e, stackTrace: stackTrace, tag: 'Config');
-      _value = const ConfigValue(questions: [], questionMap: {});
-      return _value!;
+      rethrow;
     }
   }
 }

@@ -127,20 +127,10 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   Future<void> _recordGuess(String actualNote, String guessedNote, bool isCorrect) async {
     if (_currentSession == null) return;
     
-    // Update session guesses
-    final updatedGuesses = Map<String, bool>.from(_currentSession!.guesses);
-    updatedGuesses[actualNote] = isCorrect;
-    
     // Move to next note
     final nextIndex = _currentSession!.currentNoteIndex + 1;
     
     // Update last activity time
-    final updatedSession = _currentSession!.copyWith(
-      guesses: updatedGuesses,
-      currentNoteIndex: nextIndex,
-      lastActivityTime: DateTime.now(),
-    );
-    
     // Update note scores
     if (isCorrect) {
       await _memoryService.updateNoteScore(actualNote, _currentSession!.settings.scores);
@@ -150,7 +140,14 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
     }
     
     setState(() {
-      _currentSession = updatedSession;
+      _currentSession!.guesses.add(Guess(
+        timestamp: DateTime.now(),
+        note: actualNote,
+        choosedNote: guessedNote,
+      ));
+      _currentSession!.currentNoteIndex = nextIndex;
+      _currentSession!.lastActivityTime = DateTime.now();
+      _memoryService.save();
     });
   }
 
@@ -303,7 +300,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                 Icon(Icons.timeline, color: Colors.blue[700], size: 28),
                 const SizedBox(width: 12),
                 Text(
-                  '${_currentSession!.type.name.toUpperCase()} Session',
+                  sessionTypeToString(_currentSession!.type),
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -409,16 +406,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
     // Build a list of all notes with their results
     final List<Widget> noteWidgets = [];
     
-    // Track which notes have been guessed to avoid duplicates
-    final guessedNotes = <String>{};
-    
-    for (final entry in _currentSession!.guesses.entries) {
-      final note = entry.key;
-      final isCorrect = entry.value;
-      
-      if (guessedNotes.contains(note)) continue;
-      guessedNotes.add(note);
-      
+    for (final guess in _currentSession!.guesses) {
       noteWidgets.add(
         Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -426,8 +414,8 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
           child: Row(
             children: [
               Icon(
-                isCorrect ? Icons.check_circle : Icons.cancel,
-                color: isCorrect ? Colors.green[600] : Colors.orange[600],
+                guess.isCorrect ? Icons.check_circle : Icons.cancel,
+                color: guess.isCorrect ? Colors.green[600] : Colors.orange[600],
                 size: 20,
               ),
               const SizedBox(width: 12),
@@ -436,22 +424,22 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isCorrect 
-                          ? '$note - correct'
-                          : '$note - incorrect',
+                      guess.isCorrect 
+                          ? '${guess.note} - correct'
+                          : '${guess.note} - incorrect',
                       style: TextStyle(
                         fontSize: 15,
-                        color: isCorrect ? Colors.green[700] : Colors.orange[700],
+                        color: guess.isCorrect ? Colors.green[700] : Colors.orange[700],
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     Text(
-                      isCorrect 
+                      guess.isCorrect 
                           ? '+${_currentSession!.settings.scores} points'
                           : '-${_currentSession!.settings.penalty} points',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isCorrect ? Colors.green[600] : Colors.orange[600],
+                        color: guess.isCorrect ? Colors.green[600] : Colors.orange[600],
                         fontWeight: FontWeight.bold,
                       ),
                     ),
