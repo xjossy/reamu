@@ -132,19 +132,6 @@ class _SimplePlayingPageState extends State<SimplePlayingPage> with MidiCleanupM
                     ),
                   ),
                 ),
-                // Info panel
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  color: Colors.grey[850],
-                  child: Text(
-                    'Roland SC-55 SoundFont | FluidSynth MIDI',
-                    style: TextStyle(
-                      color: Colors.blue[400],
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
               ],
             ),
     );

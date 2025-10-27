@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../widgets/menu_tile.dart';
-import '../absolute_pitch/absolute_pitch_page.dart';
 import '../simple_playing/simple_playing_page.dart';
 import '../synesthetic_pitch/synesthetic_flow.dart';
 import 'settings_page.dart';
@@ -45,18 +44,13 @@ class MainMenuPage extends StatelessWidget {
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           children: [
-            // Absolute Pitch Training Tile
+            // Synesthetic Pitch - Describing Tile
             MenuTile(
-              title: 'Absolute Pitch',
-              icon: Icons.music_note,
-              color: Colors.blue,
+              title: 'Synesthetic Pitch',
+              icon: Icons.psychology,
+              color: Colors.teal,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AbsolutePitchPage(),
-                  ),
-                );
+                SynestheticFlow.run(context);
               },
             ),
             
@@ -72,16 +66,6 @@ class MainMenuPage extends StatelessWidget {
                     builder: (context) => const SimplePlayingPage(),
                   ),
                 );
-              },
-            ),
-            
-            // Synesthetic Pitch - Describing Tile
-            MenuTile(
-              title: 'Synesthetic Pitch',
-              icon: Icons.psychology,
-              color: Colors.teal,
-              onTap: () {
-                SynestheticFlow.run(context);
               },
             ),
           ],
