@@ -62,11 +62,7 @@ class _NoteButtonState extends State<NoteButton> {
           color: _isPressed 
               ? (isBlack ? Colors.blue[600] : isGray ? Colors.blue[400] : Colors.blue[300])
               : (isBlack ? Colors.grey[900] : isGray ? Colors.grey[600] : Colors.white),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isBlack ? Colors.grey[700]! : isGray ? Colors.grey[500]! : Colors.grey[300]!,
-            width: 1,
-          ),
+          borderRadius: BorderRadius.circular(1),
           boxShadow: _isPressed
               ? [
                   BoxShadow(

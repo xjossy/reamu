@@ -9,11 +9,11 @@ part of 'describing_question.dart';
 QuestionOption _$QuestionOptionFromJson(Map<String, dynamic> json) =>
     QuestionOption(
       key: json['key'] as String,
-      nameEn: json['nameEn'] as String,
+      nameEn: json['name_en'] as String,
     );
 
 Map<String, dynamic> _$QuestionOptionToJson(QuestionOption instance) =>
-    <String, dynamic>{'key': instance.key, 'nameEn': instance.nameEn};
+    <String, dynamic>{'key': instance.key, 'name_en': instance.nameEn};
 
 DescribingQuestion _$DescribingQuestionFromJson(Map<String, dynamic> json) =>
     DescribingQuestion(

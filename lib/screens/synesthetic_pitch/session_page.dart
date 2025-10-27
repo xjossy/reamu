@@ -99,7 +99,8 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   Future<void> _startGuessing() async {
     if (_currentSession == null) return;
     
-    final currentNote = _currentSession!.currentNote;
+    final memoryServiceData = await _memoryService.ensureData();
+    final currentNote = _currentSession!.getNextNote(memoryServiceData.synestheticPitch.learnedNotes);
     if (currentNote == null) {
       // Session completed, recheck it
       await _recheckSession();
@@ -126,24 +127,28 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
 
   Future<void> _recordGuess(String actualNote, String guessedNote, bool isCorrect) async {
     if (_currentSession == null) return;
+
+    final now = DateTime.now();
+
+    final score = _currentSession!.getScore(isCorrect, now);
     
     // Move to next note
     final nextIndex = _currentSession!.currentNoteIndex + 1;
     
     // Update last activity time
     // Update note scores
-    if (isCorrect) {
-      await _memoryService.updateNoteScore(actualNote, _currentSession!.settings.scores);
-    } else {
-      await _memoryService.updateNoteScore(actualNote, -_currentSession!.settings.penalty);
+    await _memoryService.updateNoteScore(actualNote, score);
+    if (!isCorrect) {
       await _memoryService.updateNoteScore(guessedNote, -_currentSession!.settings.penalty);
     }
+    await _memoryService.updateGuessStatistics(actualNote, guessedNote);
     
     setState(() {
       _currentSession!.guesses.add(Guess(
-        timestamp: DateTime.now(),
+        timestamp: now,
         note: actualNote,
         choosedNote: guessedNote,
+        scores: score,
       ));
       _currentSession!.currentNoteIndex = nextIndex;
       _currentSession!.lastActivityTime = DateTime.now();
@@ -157,11 +162,8 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
     // Check if session is now completed
     if (_currentSession!.isCompletedSuccessfully) {
       await _completeSession(_currentSession!);
-      if (mounted) {
-        Navigator.pop(context);
-      }
     } else if (_currentSession!.isCompleted) {
-      // Session timed out
+      // Session timed out - just exit without dialog
       if (mounted) {
         Navigator.pop(context);
       }
@@ -172,8 +174,8 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
   }
 
   Future<void> _completeSession(ActiveSession session) async {
-    // Record successful completion
-    await _memoryService.completeSessionSuccessfully(session);
+    // Check if day is complete
+    final dayCompletionScores = await _memoryService.checkDayComplete();
     
     // Calculate accuracy
     final totalGuesses = session.correctCount + session.incorrectCount;
@@ -187,17 +189,64 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: Text(
-            'Session Complete! 🎉',
+            dayCompletionScores != null 
+                ? 'Day Complete! 🎉🎉' 
+                : 'Session Complete! 🎉',
             style: TextStyle(
-              color: Colors.green[700],
+              color: dayCompletionScores != null ? Colors.purple[700] : Colors.green[700],
               fontWeight: FontWeight.bold,
             ),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (dayCompletionScores != null) ...[
+                Text(
+                  'Congratulations! You\'ve completed ALL sessions for today!',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.purple[700],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Additional scores earned:',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...dayCompletionScores.entries.map((entry) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        entry.key,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      Text(
+                        '+${entry.value}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+              ],
               Text(
-                'Congratulations on completing your synesthetic pitch session!',
+                dayCompletionScores != null 
+                    ? 'Final session results:'
+                    : 'Congratulations on completing your synesthetic pitch session!',
                 style: const TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 16),
@@ -309,6 +358,29 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                 ),
               ],
             ),
+            
+            // Session description
+            if (_currentSession!.settings.description != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue[200]!, width: 1),
+                ),
+                child: Text(
+                  _currentSession!.settings.description!,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.blue[800],
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+            
             const SizedBox(height: 20),
             
             // Score display
@@ -426,7 +498,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                     Text(
                       guess.isCorrect 
                           ? '${guess.note} - correct'
-                          : '${guess.note} - incorrect',
+                          : '${guess.note} - you guessed ${guess.choosedNote}',
                       style: TextStyle(
                         fontSize: 15,
                         color: guess.isCorrect ? Colors.green[700] : Colors.orange[700],
@@ -434,9 +506,7 @@ class _SessionPageState extends State<SessionPage> with WidgetsBindingObserver {
                       ),
                     ),
                     Text(
-                      guess.isCorrect 
-                          ? '+${_currentSession!.settings.scores} points'
-                          : '-${_currentSession!.settings.penalty} points',
+                      '${guess.scores > 0 ? '+' : ''}${guess.scores} points',
                       style: TextStyle(
                         fontSize: 12,
                         color: guess.isCorrect ? Colors.green[600] : Colors.orange[600],

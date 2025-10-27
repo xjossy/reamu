@@ -6,30 +6,24 @@ import 'session_settings.dart';
 part 'day_progress.g.dart';
 
 /// Represents a user's daily progress for synesthetic pitch training
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class DayProgress {
-  @JsonKey(name: 'day_plan')
   final DayPlan dayPlan;
   
   // Session ID mappings - now mutable
-  @JsonKey(name: 'morning_session_id')
   String? morningSessionId;
   
-  @JsonKey(name: 'practice_session_id')
   String? practiceSessionId;
   
-  @JsonKey(name: 'instant_sessions')
   Map<int, String> instantSessions; // instant session number -> session ID
   
-  @JsonKey(name: 'active_instant_session_id')
   String? activeInstantSessionId;
   
-  @JsonKey(name: 'completed_instant_session_numbers')
-  List<int> completedInstantSessionNumbers; // numbers of completed instant sessions
-  
   // Session management via SessionManager
-  @JsonKey(name: 'sessions')
   final SessionManager sessionManager;
+
+  @JsonKey(defaultValue: false)
+  bool dayIsComplete;
 
   DayProgress({
     required this.dayPlan,
@@ -37,10 +31,9 @@ class DayProgress {
     this.practiceSessionId,
     Map<int, String>? instantSessions,
     this.activeInstantSessionId,
-    List<int>? completedInstantSessionNumbers,
     SessionManager? sessionManager,
+    this.dayIsComplete = false,
   })  : instantSessions = instantSessions ?? {},
-        completedInstantSessionNumbers = completedInstantSessionNumbers ?? [],
         sessionManager = sessionManager ?? SessionManager();
 
   factory DayProgress.fromJson(Map<String, dynamic> json) =>
@@ -58,11 +51,6 @@ class DayProgress {
     sessionManager.saveSession(session);
   }
 
-  /// Remove session by ID
-  void removeSession(String sessionId) {
-    sessionManager.removeSession(sessionId);
-  }
-
   /// Check if morning session is completed
   bool isMorningSessionCompleted() {
     if (morningSessionId == null) return false;
@@ -70,16 +58,10 @@ class DayProgress {
     return session?.isCompleted ?? false;
   }
 
-  /// Check if practice session is completed
-  bool isPracticeSessionCompleted() {
-    if (practiceSessionId == null) return false;
-    final session = getSessionById(practiceSessionId!);
-    return session?.isCompletedSuccessfully ?? false;
-  }
-
   /// Check if the specified instant session has been completed
   bool isInstantSessionComplete(int sessionNumber) {
-    return completedInstantSessionNumbers.contains(sessionNumber);
+    return instantSessions.containsKey(sessionNumber) && 
+      (getSessionById(instantSessions[sessionNumber]!)?.isCompleted ?? false);
   }
 
   /// Returns the current instant session number that should be active now,
@@ -121,15 +103,56 @@ class DayProgress {
 
     return session;
   }
+
+  /// Check if day is complete and compute positive guesses
+  Map<String, int>? checkDayComplete() {
+    // If day is already complete, do nothing
+    if (dayIsComplete) {
+      return null;
+    }
+
+    // Check if morning session is completed
+    if (!isMorningSessionCompleted()) {
+      return null;
+    }
+
+    // Check if all instant sessions are completed
+    for (int i = 1; i <= dayPlan.instantSessionTimestamps.length; i++) {
+      if (!isInstantSessionComplete(i)) {
+        return null;
+      }
+    }
+
+    // All sessions completed - compute positive guesses
+    final Map<String, int> totalPositiveGuesses = {};
+
+    // Collect all relevant session IDs: morning + instant sessions
+    final List<String> sessionIds = [
+      if (morningSessionId != null) morningSessionId!,
+      ...instantSessions.values,
+    ];
+
+    for (final sessionId in sessionIds) {
+      final session = getSessionById(sessionId);
+      if (session != null) {
+        final guesses = session.computePositiveGuesses();
+        for (final entry in guesses.entries) {
+          totalPositiveGuesses[entry.key] = (totalPositiveGuesses[entry.key] ?? 0) + entry.value;
+        }
+      }
+    }
+
+    dayIsComplete = true;
+
+    return totalPositiveGuesses;
+  }
 }
 
 /// Daily plan for sessions
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class DayPlan {
-  @JsonKey(name: 'morning_session_timestamp')
   final DateTime morningSessionTimestamp;
   
-  @JsonKey(name: 'instant_session_timestamps')
   final List<DateTime> instantSessionTimestamps;
 
   DayPlan({

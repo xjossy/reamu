@@ -30,8 +30,7 @@ class _DebugPageState extends State<DebugPage> {
     });
 
     try {
-      final progress = await _memoryService.ensureData();
-      final data = progress.toJson();
+      final data = await _memoryService.getRawData();
       
       setState(() {
         _progressData = data;

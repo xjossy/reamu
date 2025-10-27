@@ -3,7 +3,7 @@ import 'package:json_annotation/json_annotation.dart';
 part 'describing_question.g.dart';
 
 /// Represents a single option in a describing question
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class QuestionOption {
   final String key;
   final String nameEn;
@@ -19,7 +19,7 @@ class QuestionOption {
   Map<String, dynamic> toJson() => _$QuestionOptionToJson(this);
 }
 
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class DescribingQuestion {
   final String key;
   final String question;

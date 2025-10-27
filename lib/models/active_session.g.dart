@@ -10,12 +10,14 @@ Guess _$GuessFromJson(Map<String, dynamic> json) => Guess(
   timestamp: DateTime.parse(json['timestamp'] as String),
   note: json['note'] as String,
   choosedNote: json['choosed_note'] as String,
+  scores: (json['scores'] as num?)?.toInt() ?? 0,
 );
 
 Map<String, dynamic> _$GuessToJson(Guess instance) => <String, dynamic>{
   'timestamp': instance.timestamp.toIso8601String(),
   'note': instance.note,
   'choosed_note': instance.choosedNote,
+  'scores': instance.scores,
 };
 
 SessionData _$SessionDataFromJson(Map<String, dynamic> json) => SessionData(

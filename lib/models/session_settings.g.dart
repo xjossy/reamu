@@ -14,6 +14,9 @@ SessionSettings _$SessionSettingsFromJson(Map<String, dynamic> json) =>
       notes: (json['notes'] as num?)?.toInt(),
       maxInactivityMinutes: (json['max_inactivity_minutes'] as num?)?.toInt(),
       lifetimeMinutes: (json['lifetime_minutes'] as num?)?.toInt(),
+      scoredNotesGapMinutes: (json['scored_notes_gap_minutes'] as num?)
+          ?.toInt(),
+      description: json['description'] as String?,
     );
 
 Map<String, dynamic> _$SessionSettingsToJson(SessionSettings instance) =>
@@ -24,4 +27,6 @@ Map<String, dynamic> _$SessionSettingsToJson(SessionSettings instance) =>
       'notes': instance.notes,
       'max_inactivity_minutes': instance.maxInactivityMinutes,
       'lifetime_minutes': instance.lifetimeMinutes,
+      'scored_notes_gap_minutes': instance.scoredNotesGapMinutes,
+      'description': instance.description,
     };

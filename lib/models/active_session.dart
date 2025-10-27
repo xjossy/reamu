@@ -1,23 +1,26 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'session_settings.dart';
+import 'dart:math';
 
 part 'active_session.g.dart';
 
 /// Represents a single guess made during a session
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class Guess {
-  @JsonKey(name: 'timestamp')
   final DateTime timestamp;
   
   final String note;
   
-  @JsonKey(name: 'choosed_note')
   final String choosedNote;
+
+  @JsonKey(defaultValue: 0)
+  final int scores;
   
   Guess({
     required this.timestamp,
     required this.note,
     required this.choosedNote,
+    required this.scores,
   });
 
   factory Guess.fromJson(Map<String, dynamic> json) => _$GuessFromJson(json);
@@ -29,7 +32,7 @@ class Guess {
 }
 
 /// Represents session data stored persistently
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class SessionData {
   final String id; // Unique session identifier
   final DateTime day; // Day identifier from DayProgress
@@ -37,18 +40,14 @@ class SessionData {
   final SessionType type;
   final SessionSettings settings;
   
-  @JsonKey(name: 'notes_to_guess')
   final List<String>? notesToGuess;
   
-  @JsonKey(name: 'start_time')
   final DateTime startTime;
   
-  @JsonKey(name: 'last_activity_time')
   DateTime? lastActivityTime;
   
   final List<Guess> guesses;
   
-  @JsonKey(name: 'current_note_index')
   int currentNoteIndex;
 
   SessionData({
@@ -68,8 +67,20 @@ class SessionData {
 
   Map<String, dynamic> toJson() => _$SessionDataToJson(this);
 
+  static int _getRandomIndex(int max, int? exclude) {
+    if (exclude == null) return Random().nextInt(max);
+    int index = Random().nextInt(max - 1);
+    return index >= exclude ? index + 1 : index;
+  }
+
   /// Get the current note to guess
-  String? get currentNote {
+  String? getNextNote(List<String> learnedNotes) {
+    if (settings.notes == null) {
+      if (learnedNotes.isEmpty) return null;
+      final lastNote = guesses.lastOrNull?.note;
+      final lastNoteIndex = lastNote != null ? learnedNotes.indexOf(lastNote) : null;
+      return learnedNotes[_getRandomIndex(learnedNotes.length, lastNoteIndex)];
+    }
     if (notesToGuess == null || currentNoteIndex >= notesToGuess!.length) {
       return null;
     }
@@ -80,11 +91,7 @@ class SessionData {
   int get totalScore {
     int score = 0;
     for (final guess in guesses) {
-      if (guess.isCorrect) {
-        score += settings.scores;
-      } else {
-        score -= settings.penalty;
-      }
+      score += guess.scores;
     }
     return score;
   }
@@ -135,6 +142,33 @@ class SessionData {
   /// Check if session should be ended (timeout)
   bool shouldEnd() {
     return isInactivityTimeout() || isLifetimeTimeout();
+  }
+
+  int getScore(bool isCorrect, DateTime ts) {
+    final score = isCorrect ? settings.scores : -settings.penalty;
+    if (settings.scoredNotesGapMinutes == null) {
+      return score;
+    }
+    final lastGuess = guesses.lastOrNull;
+    if (lastGuess == null) {
+      return score;
+    }
+    final lastGuessTime = lastGuess.timestamp;
+    final timeDiff = ts.difference(lastGuessTime);
+    return timeDiff.inMinutes >= settings.scoredNotesGapMinutes! ? score : 0;
+  }
+
+  /// Compute positive guesses for each note
+  Map<String, int> computePositiveGuesses() {
+    final Map<String, int> positiveGuesses = {};
+    
+    for (final guess in guesses) {
+      if (guess.scores > 0) {
+        positiveGuesses[guess.note] = (positiveGuesses[guess.note] ?? 0) + guess.scores;
+      }
+    }
+    
+    return positiveGuesses;
   }
 }
 

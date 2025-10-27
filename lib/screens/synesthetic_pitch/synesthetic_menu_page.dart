@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/global_memory_service.dart';
 import '../../services/logging_service.dart';
+import '../../services/settings_service.dart';
 import 'statistics_page.dart';
 import 'learning_flow.dart';
 import 'personalization_wizard_page.dart';
@@ -18,12 +19,15 @@ class SynestheticMenuPage extends StatefulWidget {
 
 class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   final GlobalMemoryService _memoryService = GlobalMemoryService.instance;
+  final SettingsService _settingsService = SettingsService.instance;
   UserProgressData? _userProgress;
   List<String> _noteSequence = [];
   bool _isLoading = true;
   int _currentLevel = 1;
   Map<String, int> _noteScores = {};
   DayProgress? _dayProgress;
+  int _maximumNoteScore = 0;
+  int _sufficientNoteScore = 0;
 
   @override
   void initState() {
@@ -33,9 +37,24 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
 
   Future<void> _loadData() async {
     Log.i('🔄 Synesthetic Pitch: Loading data...');
-    final progress = await _memoryService.ensureData();
-    final level = await _memoryService.getCurrentLevel();
     final noteScores = await _memoryService.getAllNoteScores();
+    
+    // Check if level is complete
+    await _memoryService.checkLevelIsComplete();
+    
+    // Reload data after potential level completion
+    var updatedProgress = await _memoryService.ensureData();
+    
+    // Auto-advance if level is complete and all notes are learned
+    if (updatedProgress.synestheticPitch.levelComplete && updatedProgress.synestheticPitch.notesToLearn == 0) {
+      await _memoryService.completeLevel();
+      updatedProgress = await _memoryService.ensureData();
+    }
+    
+    // Load settings
+    final settings = await _settingsService.getSettings();
+    final maximumNoteScore = settings.synestheticPitch.maximumNoteScore;
+    final sufficientNoteScore = settings.synestheticPitch.sufficientNoteScore;
     
     // Create keyboard order from C3 to C5
     final keyboardNotes = _generateKeyboardNotes();
@@ -50,11 +69,13 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     }
 
     setState(() {
-      _userProgress = progress;
+      _userProgress = updatedProgress;
       _noteSequence = keyboardNotes;
-      _currentLevel = level;
+      _currentLevel = updatedProgress.synestheticPitch.level;
       _noteScores = noteScores;
       _dayProgress = dayProgress;
+      _maximumNoteScore = maximumNoteScore;
+      _sufficientNoteScore = sufficientNoteScore;
       _isLoading = false;
     });
   }
@@ -201,162 +222,16 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
                             }
                           }
                         } : null,
-                        child: Container(
-                          height: 50,
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          decoration: BoxDecoration(
-                            color: isLearned 
-                                ? Colors.green[100] 
-                                : isOpened 
-                                    ? Colors.blue[100] 
-                                    : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isLearned 
-                                  ? Colors.green[400]! 
-                                  : isOpened 
-                                      ? Colors.blue[400]! 
-                                      : Colors.grey[400]!,
-                              width: 1,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                noteName,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: isLearned 
-                                      ? Colors.green[700] 
-                                      : isOpened 
-                                          ? Colors.blue[700] 
-                                          : Colors.grey[500],
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Icon(
-                                isLearned 
-                                    ? Icons.check_circle 
-                                    : isOpened 
-                                        ? Icons.play_circle_outline 
-                                        : Icons.lock,
-                                size: 12,
-                                color: isLearned 
-                                    ? Colors.green[600] 
-                                    : isOpened 
-                                        ? Colors.blue[600] 
-                                        : Colors.grey[500],
-                              ),
-                            ],
-                          ),
-                        ),
+                        child: _buildNoteButton(noteName, isLearned, isOpened),
                       ),
                     );
                   }).toList(),
                 ),
               );
             }),
-            
-            const SizedBox(height: 24),
-            
-            // Progress Summary
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Learning Progress',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildProgressItem(
-                          'Opened',
-                          _userProgress?.synestheticPitch.openedNotes.length ?? 0,
-                          _noteSequence.length,
-                          Colors.blue,
-                        ),
-                        _buildProgressItem(
-                          'Learned',
-                          _userProgress?.synestheticPitch.learnedNotes.length ?? 0,
-                          _noteSequence.length,
-                          Colors.green,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildProgressItem(String label, int current, int total, Color color) {
-    final percentage = total > 0 ? current / total : 0.0;
-    
-    // Get darker shade for text
-    Color textColor = color;
-    if (color == Colors.blue) {
-      textColor = Colors.blue[700]!;
-    } else if (color == Colors.green) {
-      textColor = Colors.green[700]!;
-    }
-    
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[600],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '$current/$total',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          height: 6,
-          width: 100,
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: percentage,
-            child: Container(
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -397,6 +272,14 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
+                  // Handle level completion
+                  if (_userProgress?.synestheticPitch.levelComplete == true && _userProgress!.synestheticPitch.notesToLearn > 0) {
+                    // Learn next note
+                    await _learnNextNote();
+                    return;
+                  }
+                  
+                  // Regular session flow
                   final sessionType = _getSessionType();
                   if (sessionType != null) {
                     Navigator.push(
@@ -614,6 +497,17 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
   }
 
   Map<String, String> _getSessionButtonInfo() {
+    // Check if level is complete and needs learning
+    if (_userProgress?.synestheticPitch.levelComplete == true) {
+      if (_userProgress!.synestheticPitch.notesToLearn > 0) {
+        return {
+          'buttonText': 'Complete Level!',
+          'statusMessage': 'Learn ${_userProgress!.synestheticPitch.notesToLearn} more notes to advance to next level'
+        };
+      }
+      // This case should not happen as we auto-advance when notesToLearn == 0
+    }
+    
     final morningCompleted = _dayProgress!.isMorningSessionCompleted();
     final instantSessions = _dayProgress!.dayPlan.instantSessionTimestamps;
     final morningTime = _dayProgress!.dayPlan.morningSessionTimestamp;
@@ -639,22 +533,16 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     // Practice mode - either no current session or current session is completed
     final tomorrowMorning = morningTime.add(const Duration(days: 1));
     String statusMessage;
-    if (_dayProgress!.completedInstantSessionNumbers.length == instantSessions.length) {
+    
+    // Practice mode - find next upcoming session
+    final isLastSession = currentSessionNumber != null && currentSessionNumber == instantSessions.length;
+    
+    if (isLastSession || instantSessions.isEmpty) {
       statusMessage = 'All complete today! Next morning session at ${_formatTime(tomorrowMorning)}';
     } else {
-      DateTime nextSessionTime;
-      
-      // Practice mode - find next upcoming session
-      final isLastSession = currentSessionNumber != null && currentSessionNumber == instantSessions.length;
-      
-      if (isLastSession || instantSessions.isEmpty) {
-        nextSessionTime = tomorrowMorning;
-      } else {
-        nextSessionTime = instantSessions[currentSessionNumber ?? 0];
-      }
-
-      statusMessage = 'Next session at ${_formatTime(nextSessionTime)}';
+      statusMessage = 'Next session at ${_formatTime(instantSessions[currentSessionNumber ?? 0])}';
     }
+
     return {
       'buttonText': 'Practice Mode',
       'statusMessage': statusMessage
@@ -665,6 +553,44 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+
+  Future<void> _learnNextNote() async {
+    // Get the first note from note_sequence that is not in learned notes
+    final learnedNotes = _userProgress!.synestheticPitch.learnedNotes;
+    final settings = (await _settingsService.getSettings()).synestheticPitch;
+    
+    String? noteToLearn;
+    for (final note in settings.noteSequence) {
+      if (!learnedNotes.contains(note)) {
+        noteToLearn = note;
+        break;
+      }
+    }
+    
+    if (noteToLearn == null) {
+      Log.e('No more notes to learn!', tag: 'SynestheticMenu');
+      return;
+    }
+    
+    // Start learning flow
+    final completed = await LearningFlow.runLearning(context, noteToLearn);
+    if (completed) {
+      // Decrease notesToLearn
+      final data = await _memoryService.ensureData();
+      data.synestheticPitch.notesToLearn--;
+      
+      // If there are more notes to learn, start learning the next one
+      if (data.synestheticPitch.notesToLearn > 0) {
+        await _learnNextNote();
+      } else {
+        // All notes learned - automatically advance to next level
+        await _memoryService.completeLevel();
+      }
+      
+      // Reload data
+      await _loadData();
+    }
   }
 
   Widget _buildLevelCard() {
@@ -737,5 +663,102 @@ class _SynestheticMenuPageState extends State<SynestheticMenuPage> {
     
     // Otherwise, start practice session
     return SessionType.practice;
+  }
+
+  Widget _buildNoteButton(String noteName, bool isLearned, bool isOpened) {
+    final score = _noteScores[noteName] ?? 0;
+    final percentage = _maximumNoteScore > 0 ? (score / _maximumNoteScore).clamp(0.0, 1.0) : 0.0;
+    final isReadyNote = isLearned && score >= _sufficientNoteScore;
+    
+    // Determine colors based on status and progress
+    Color backgroundColor;
+    Color borderColor;
+    Color textColor;
+    
+    if (isLearned) {
+      // Lerp from light green to darker green based on progress
+      backgroundColor = Color.lerp(
+        Colors.green[50]!,
+        Colors.green[300]!,
+        percentage,
+      ) ?? Colors.green[50]!;
+      borderColor = Color.lerp(
+        Colors.green[400]!,
+        Colors.green[700]!,
+        percentage,
+      ) ?? Colors.green[400]!;
+      textColor = Colors.green[800]!;
+    } else if (isOpened) {
+      // Lerp from light blue to darker blue based on progress
+      backgroundColor = Color.lerp(
+        Colors.blue[50]!,
+        Colors.blue[300]!,
+        percentage,
+      ) ?? Colors.blue[50]!;
+      borderColor = Color.lerp(
+        Colors.blue[400]!,
+        Colors.blue[700]!,
+        percentage,
+      ) ?? Colors.blue[400]!;
+      textColor = Colors.blue[800]!;
+    } else {
+      backgroundColor = Colors.grey[200]!;
+      borderColor = Colors.grey[400]!;
+      textColor = Colors.grey[500]!;
+    }
+    
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: borderColor,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Note name for unopened notes, score for learned notes
+          if (isLearned || isOpened)
+            Text(
+              noteName,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            )
+          else
+            Text(
+              noteName,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+          const SizedBox(height: 2),
+          // Show score for learned notes or icon
+          if (isReadyNote)
+            Icon(Icons.check_circle, size: 12, color: Colors.green[600])
+          else if (isLearned)
+            Text(
+              '${((score / _sufficientNoteScore) * 100).clamp(0, 100).toStringAsFixed(0)}%',
+              style: TextStyle(
+                fontSize: 8,
+                color: textColor,
+                fontWeight: FontWeight.w500,
+              ),
+            )
+          else if (isOpened)
+            Icon(Icons.play_circle_outline, size: 12, color: Colors.blue[600])
+          else
+            Icon(Icons.lock, size: 12, color: Colors.grey[500]),
+        ],
+      ),
+    );
   }
 }

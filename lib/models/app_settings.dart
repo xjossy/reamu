@@ -4,9 +4,8 @@ import 'session_settings.dart';
 part 'app_settings.g.dart';
 
 /// Global application settings
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class AppSettings {
-  @JsonKey(name: 'synestetic_pitch')
   final SynestheticPitchSettings synestheticPitch;
 
   AppSettings({
@@ -20,47 +19,42 @@ class AppSettings {
 }
 
 /// Synesthetic pitch specific settings
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class SynestheticPitchSettings {
-  @JsonKey(name: 'guess_questions')
   final int guessQuestions;
 
-  @JsonKey(name: 'session_length_minutes')
   final int sessionLengthMinutes;
 
-  @JsonKey(name: 'maximum_note_score')
   final int maximumNoteScore;
 
-  @JsonKey(name: 'note_sequence')
+  final int sufficientNoteScore;
+
   final List<String> noteSequence;
 
-  @JsonKey(name: 'start_with_notes')
   final int startWithNotes;
 
-  @JsonKey(name: 'minumum_instant_sessions')
+  final int notesPerLevel;
+
   final int minimumInstantSessions;
 
-  @JsonKey(name: 'maximum_instant_sessions')
   final int maximumInstantSessions;
 
-  @JsonKey(name: 'default_instant_sessions')
   final int defaultInstantSessions;
 
-  @JsonKey(name: 'morning_session_settings')
   final SessionSettings morningSessionSettings;
 
-  @JsonKey(name: 'instant_session_settings')
   final SessionSettings instantSessionSettings;
 
-  @JsonKey(name: 'practice_session_settings')
   final SessionSettings practiceSessionSettings;
 
   SynestheticPitchSettings({
     required this.guessQuestions,
     required this.sessionLengthMinutes,
     required this.maximumNoteScore,
+    required this.sufficientNoteScore,
     required this.noteSequence,
     required this.startWithNotes,
+    required this.notesPerLevel,
     required this.minimumInstantSessions,
     required this.maximumInstantSessions,
     required this.defaultInstantSessions,

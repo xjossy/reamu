@@ -31,6 +31,15 @@ class GlobalMemoryService {
   }
   
   /// Ensure data is loaded in memory, loading only once
+  Future<Map<String, dynamic>> getRawData() async {
+    if (_data != null) {
+      return _data!.toJson();
+    }
+
+    return await _storageManager.loadData();
+  }
+  
+  /// Ensure data is loaded in memory, loading only once
   Future<UserProgressData> ensureData() async {
     if (_data != null) {
       return _data!;
@@ -59,16 +68,7 @@ class GlobalMemoryService {
   /// Create default user progress data
   UserProgressData _createDefaultData() {
     return UserProgressData(
-      synestheticPitch: SynestheticPitchData(
-        started: false,
-        openedNotes: [],
-        learnedNotes: [],
-        noteStatistics: {},
-        level: 1,
-        noteScores: {},
-        personalization: null,
-        dayProgress: null,
-      ),
+      synestheticPitch: SynestheticPitchData(),
     );
   }
 
@@ -153,21 +153,22 @@ class GlobalMemoryService {
 
   // ==================== NOTE SCORES ====================
 
+  void _updateNoteScoreImpl(AppSettings settings, UserProgressData data, String noteName, int scoreChange) {
+    final maxScore = settings.synestheticPitch.maximumNoteScore;
+
+    int newScore = data.synestheticPitch.noteScores[noteName] ?? 0 + scoreChange;
+    newScore = max(0, min(maxScore, newScore));
+    data.synestheticPitch.noteScores[noteName] = newScore;
+  }
+
   Future<void> updateNoteScore(String noteName, int scoreChange) async {
     final data = await ensureData();
     final settings = await _settingsService.getSettings();
-    final maxScore = settings.synestheticPitch.maximumNoteScore;
     
-    if (!data.synestheticPitch.noteScores.containsKey(noteName)) {
-      data.synestheticPitch.noteScores[noteName] = 0;
-    }
-
-    int newScore = data.synestheticPitch.noteScores[noteName]! + scoreChange;
-    newScore = max(0, min(maxScore, newScore));
-    data.synestheticPitch.noteScores[noteName] = newScore;
+    _updateNoteScoreImpl(settings, data, noteName, scoreChange);
     
     _saveData();
-    Log.i('Updated score for $noteName: ${data.synestheticPitch.noteScores[noteName]} (change: $scoreChange, clamped to 0-$maxScore)', tag: 'Memory');
+    Log.i('Updated score for $noteName: ${data.synestheticPitch.noteScores[noteName]} (change: $scoreChange)', tag: 'Memory');
   }
 
   Future<int> getNoteScore(String noteName) async {
@@ -195,10 +196,72 @@ class GlobalMemoryService {
     return data.synestheticPitch.dayProgress;
   }
 
-  Future<void> saveDayProgress(DayProgress dayProgress) async {
+  /// Check if day is complete and add scores to notes
+  Future<Map<String, int>?> checkDayComplete() async {
+    final dayProgress = await getDayProgress();
+    if (dayProgress == null) {
+      return null;
+    }
+
+    final positiveGuesses = dayProgress.checkDayComplete();
+    if (positiveGuesses == null) {
+      return null;
+    }
+
+    // Add scores to notes
     final data = await ensureData();
-    data.synestheticPitch.dayProgress = dayProgress;
+    final settings = await _settingsService.getSettings();
+    for (final entry in positiveGuesses.entries) {
+      _updateNoteScoreImpl(settings, data, entry.key, entry.value);
+    }
+
+    return positiveGuesses;
+  }
+
+  /// Check if level is complete and set up next level
+  Future<void> checkLevelIsComplete() async {
+    final data = await ensureData();
+    final settings = await _settingsService.getSettings();
+    
+    // If level is already complete, do nothing
+    if (data.synestheticPitch.levelComplete) {
+      return;
+    }
+    
+    // Check if all learned notes have sufficient scores
+    final sufficientScore = settings.synestheticPitch.sufficientNoteScore;
+    final learnedNotes = data.synestheticPitch.learnedNotes;
+    
+    for (final noteName in learnedNotes) {
+      final score = data.synestheticPitch.noteScores[noteName] ?? 0;
+      if (score < sufficientScore) {
+        return; // Not all notes have sufficient scores
+      }
+    }
+    
+    // All learned notes have sufficient scores - level complete!
+    data.synestheticPitch.levelComplete = true;
+    data.synestheticPitch.notesToLearn = settings.synestheticPitch.notesPerLevel;
+    
     _saveData();
+    Log.i('Level ${data.synestheticPitch.level} completed! Added ${data.synestheticPitch.notesToLearn} notes to learn', tag: 'Memory');
+  }
+
+  /// Complete the current level and move to next level
+  Future<void> completeLevel() async {
+    final data = await ensureData();
+    
+    // Reset level completion status
+    data.synestheticPitch.levelComplete = false;
+    
+    // Increase level
+    data.synestheticPitch.level++;
+    
+    // Reset all note scores (but keep guess statistics)
+    data.synestheticPitch.noteScores.clear();
+    
+    _saveData();
+    Log.i('Level completed! Moved to level ${data.synestheticPitch.level}', tag: 'Memory');
   }
 
   Future<bool> ensureDayProgressIsValid() async {
@@ -249,6 +312,13 @@ class GlobalMemoryService {
       ),
     );
 
+    if (morningSessionTimestamp.isBefore(now)) {
+      dayProgress.createAndSaveSession(
+        SessionType.morning, 
+        SessionSettings(scores: 0, penalty: 0, notes: 0), 
+        []);
+    }
+
     final data = await ensureData();
     data.synestheticPitch.dayProgress = dayProgress;
     _saveData();
@@ -256,6 +326,9 @@ class GlobalMemoryService {
   }
 
   Future<void> _createBlankDayProgress(PersonalizationSettings settings) async {
+    // Check if current day is complete before creating new day progress
+    await checkDayComplete();
+    
     final now = DateTime.now();
     final morningSessionTimestamp = _computeMorningSessionTimestamp(settings, now);
     final instantSessionTimestamps = _computeInstantSessionTimestamps(
@@ -413,25 +486,6 @@ class GlobalMemoryService {
     };
   }
 
-  Future<void> completeSessionSuccessfully(ActiveSession session) async {
-    final dayProgress = await getDayProgress();
-    if (dayProgress == null) {
-      return;
-    }
-    
-    if (session.type == SessionType.morning) {
-      dayProgress.morningSessionId = session.id;
-    } else if (session.type == SessionType.instant) {
-      final currentSessionNumber = dayProgress.getCurrentInstantSession() ?? 1;
-      if (!dayProgress.completedInstantSessionNumbers.contains(currentSessionNumber)) {
-        dayProgress.completedInstantSessionNumbers.add(currentSessionNumber);
-      }
-      dayProgress.activeInstantSessionId = null;
-    }
-    
-    save();
-  }
-
   // ==================== PERSONALIZATION ====================
 
   Future<void> savePersonalization(PersonalizationSettings settings) async {
@@ -452,5 +506,19 @@ class GlobalMemoryService {
   Future<void> resetAllUserData() async {
     await resetUserProgress();
     Log.i('All user data has been successfully reset', tag: 'Memory');
+  }
+
+  Future<void> updateGuessStatistics(String actualNote, String guessedNote) async {
+    final data = await ensureData();
+    final stats = data.synestheticPitch.getStatisticsFor(actualNote);
+    final isCorrect = actualNote == guessedNote;
+    if (isCorrect) {
+      stats.addCorrectGuess();
+    } else {
+      stats.addIncorrectGuess();
+      stats.addMissTo(guessedNote);
+      data.synestheticPitch.getStatisticsFor(guessedNote).addMissFrom(actualNote);
+    }
+    _saveData();
   }
 }

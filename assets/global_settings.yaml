@@ -1,25 +1,27 @@
-synestetic_pitch:
+synesthetic_pitch:
   note_sequence: [C4, G4, F3, E4, A3, F4, H3, D4, G3, A4, C#4, E3, F#4, H4, D#4, D3, G#4, C5]
   start_with_notes: 4
+  notes_per_level: 2
   guess_questions: 5
   session_length_minutes: 20
   maximum_note_score: 100
-  minumum_instant_sessions: 3
+  sufficient_note_score: 80
+  minimum_instant_sessions: 3
   default_instant_sessions: 7
   maximum_instant_sessions: 15
-  morning_session_scores: 10
-  morning_session_penalty: 5
   morning_session_settings:
     scores: 10
     penalty: 5
     notes: 6
+    description: "Long morning session. +10 for each correct guess, -5 for each incorrect guess each note."
   instant_session_settings:
     scores: 20
     penalty: 5
     max_inactivity_minutes: 15
     notes: 2
+    description: "Short instant session. +20 for each correct guess, -5 for each incorrect guess each note."
   practice_session_settings:
-    scores: 3
-    penalty: 1
-    reset_after_minutes: 10
-    scored_notes: 1
+    scores: 5
+    penalty: 2
+    scored_notes_gap_minutes: 10
+    description: "Get +5 scores for one random note every 10 minutes. You will lose 2 points for each incorrect guess."

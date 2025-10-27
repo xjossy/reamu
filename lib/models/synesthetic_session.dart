@@ -3,7 +3,7 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'synesthetic_session.g.dart';
 
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class SynestheticSession {
   final String id;
   final DateTime startTime;
@@ -18,10 +18,13 @@ class SynestheticSession {
     required this.startTime,
     this.endTime,
     required this.notesToGuess,
-    this.correctlyGuessed = const [],
-    this.incorrectlyGuessed = const [],
-    this.mistakes = const {},
-  });
+    List<String>? correctlyGuessed,
+    List<String>? incorrectlyGuessed,
+    Map<String, String>? mistakes,
+  }) : 
+    correctlyGuessed = correctlyGuessed ?? [],
+    incorrectlyGuessed = incorrectlyGuessed ?? [],
+    mistakes = mistakes ?? {};
 
   bool get isCompleted => endTime != null;
   int get totalNotes => notesToGuess.length;
@@ -40,8 +43,12 @@ class SynestheticSession {
     return remaining.isNotEmpty ? remaining.first : null;
   }
 
-  factory SynestheticSession.fromJson(Map<String, dynamic> json) =>
-      _$SynestheticSessionFromJson(json);
+  static Map<String, dynamic> preloadFixJson(Map<String, dynamic> json) {
+    return json;
+  }
+
+  factory SynestheticSession.fromJson(Map<String, dynamic> json) => 
+    _$SynestheticSessionFromJson(preloadFixJson(json));
 
   Map<String, dynamic> toJson() => _$SynestheticSessionToJson(this);
 

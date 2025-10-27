@@ -6,9 +6,8 @@ import 'session_settings.dart';
 part 'session_manager.g.dart';
 
 /// Manages session creation, storage, and retrieval
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class SessionManager {
-  @JsonKey(name: 'sessions')
   final Map<String, SessionData> sessions;
   
   SessionManager({
@@ -58,16 +57,6 @@ class SessionManager {
     sessions[session.id] = session;
   }
   
-  /// Remove session by ID
-  void removeSession(String id) {
-    sessions.remove(id);
-  }
-  
-  /// Get all sessions for a specific day
-  List<SessionData> getSessionsForDay(String day) {
-    return sessions.values.where((s) => s.day == day).toList();
-  }
-  
   /// Get internal sessions map (for serialization)
   Map<String, SessionData> getSessions() {
     return sessions;
@@ -83,6 +72,8 @@ class SessionManager {
     List<String> learnedNotes,
     int totalNotes,
   ) {
+    if (totalNotes <= 0 || learnedNotes.isEmpty) return [];
+    
     // Сколько раз нужно повторить изученные ноты
     final repeats = (totalNotes / learnedNotes.length).ceil();
 

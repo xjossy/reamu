@@ -14,28 +14,26 @@ DayProgress _$DayProgressFromJson(Map<String, dynamic> json) => DayProgress(
     (k, e) => MapEntry(int.parse(k), e as String),
   ),
   activeInstantSessionId: json['active_instant_session_id'] as String?,
-  completedInstantSessionNumbers:
-      (json['completed_instant_session_numbers'] as List<dynamic>?)
-          ?.map((e) => (e as num).toInt())
-          .toList(),
-  sessionManager: json['sessions'] == null
+  sessionManager: json['session_manager'] == null
       ? null
-      : SessionManager.fromJson(json['sessions'] as Map<String, dynamic>),
+      : SessionManager.fromJson(
+          json['session_manager'] as Map<String, dynamic>,
+        ),
+  dayIsComplete: json['day_is_complete'] as bool? ?? false,
 );
 
-Map<String, dynamic> _$DayProgressToJson(
-  DayProgress instance,
-) => <String, dynamic>{
-  'day_plan': instance.dayPlan.toJson(),
-  'morning_session_id': instance.morningSessionId,
-  'practice_session_id': instance.practiceSessionId,
-  'instant_sessions': instance.instantSessions.map(
-    (k, e) => MapEntry(k.toString(), e),
-  ),
-  'active_instant_session_id': instance.activeInstantSessionId,
-  'completed_instant_session_numbers': instance.completedInstantSessionNumbers,
-  'sessions': instance.sessionManager.toJson(),
-};
+Map<String, dynamic> _$DayProgressToJson(DayProgress instance) =>
+    <String, dynamic>{
+      'day_plan': instance.dayPlan.toJson(),
+      'morning_session_id': instance.morningSessionId,
+      'practice_session_id': instance.practiceSessionId,
+      'instant_sessions': instance.instantSessions.map(
+        (k, e) => MapEntry(k.toString(), e),
+      ),
+      'active_instant_session_id': instance.activeInstantSessionId,
+      'session_manager': instance.sessionManager.toJson(),
+      'day_is_complete': instance.dayIsComplete,
+    };
 
 DayPlan _$DayPlanFromJson(Map<String, dynamic> json) => DayPlan(
   morningSessionTimestamp: DateTime.parse(

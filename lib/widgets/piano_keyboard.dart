@@ -125,9 +125,10 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
       width: width,
       height: widget.keyHeight,
       child: GestureDetector(
-        onPanStart: (_) => _playNote(noteName, note.octave),
-        onPanEnd: (_) => _stopNote('$noteName${note.octave}'),
-        onPanCancel: () => _stopNote('$noteName${note.octave}'),
+        onTapDown: (_) => _playNote(noteName, note.octave),
+        onTapUp: (_) => _stopNote('$noteName${note.octave}'),
+        onLongPressEnd: (_) => _stopNote('$noteName${note.octave}'),
+        onLongPressCancel: () => _stopNote('$noteName${note.octave}'),
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
@@ -172,9 +173,10 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
       left: left,
       top: 0,
       child: GestureDetector(
-        onPanStart: (_) => _playNote(noteName, note.octave),
-        onPanEnd: (_) => _stopNote('$noteName${note.octave}'),
-        onPanCancel: () => _stopNote('$noteName${note.octave}'),
+        onTapDown: (_) => _playNote(noteName, note.octave),
+        onTapUp: (_) => _stopNote('$noteName${note.octave}'),
+        onLongPressEnd: (_) => _stopNote('$noteName${note.octave}'),
+        onLongPressCancel: () => _stopNote('$noteName${note.octave}'),
         child: Container(
           width: 30,
           height: widget.keyHeight * 0.6,

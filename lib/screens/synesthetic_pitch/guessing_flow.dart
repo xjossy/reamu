@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:reamu/services/global_memory_service.dart';
 import '../../services/global_config_service.dart';
 import '../../services/settings_service.dart';
 import 'guess_intro_page.dart';
@@ -158,6 +159,7 @@ class _GuessingFlowNavigatorState extends State<_GuessingFlowNavigator> {
                   questionsList: questions,
                   showNoteName: false,
                   doNext: (answers) async {
+                    await GlobalMemoryService.instance.updateNotesStatistics(widget.targetNote, answers);
                     // Navigate to note selection page
                     _navigatorKey.currentState!.pushReplacementNamed('/selection', arguments: answers);
                   },

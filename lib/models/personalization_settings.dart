@@ -3,21 +3,16 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'personalization_settings.g.dart';
 
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class PersonalizationSettings {
-  @JsonKey(name: 'morning_session_time')
   final String morningSessionTime; // Format: "HH:mm" (24-hour)
   
-  @JsonKey(name: 'daylight_duration_hours')
   final double daylightDurationHours; // 8-16 hours (with 0.25 precision)
   
-  @JsonKey(name: 'instant_sessions_per_day')
   final int instantSessionsPerDay; // From settings: minimum to maximum
   
-  @JsonKey(name: 'is_completed')
   final bool isCompleted;
   
-  @JsonKey(name: 'completed_at')
   final DateTime? completedAt; // Timestamp when personalization was first completed
 
   PersonalizationSettings({

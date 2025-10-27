@@ -8,12 +8,12 @@ part of 'app_settings.dart';
 
 AppSettings _$AppSettingsFromJson(Map<String, dynamic> json) => AppSettings(
   synestheticPitch: SynestheticPitchSettings.fromJson(
-    json['synestetic_pitch'] as Map<String, dynamic>,
+    json['synesthetic_pitch'] as Map<String, dynamic>,
   ),
 );
 
 Map<String, dynamic> _$AppSettingsToJson(AppSettings instance) =>
-    <String, dynamic>{'synestetic_pitch': instance.synestheticPitch.toJson()};
+    <String, dynamic>{'synesthetic_pitch': instance.synestheticPitch.toJson()};
 
 SynestheticPitchSettings _$SynestheticPitchSettingsFromJson(
   Map<String, dynamic> json,
@@ -21,11 +21,13 @@ SynestheticPitchSettings _$SynestheticPitchSettingsFromJson(
   guessQuestions: (json['guess_questions'] as num).toInt(),
   sessionLengthMinutes: (json['session_length_minutes'] as num).toInt(),
   maximumNoteScore: (json['maximum_note_score'] as num).toInt(),
+  sufficientNoteScore: (json['sufficient_note_score'] as num).toInt(),
   noteSequence: (json['note_sequence'] as List<dynamic>)
       .map((e) => e as String)
       .toList(),
   startWithNotes: (json['start_with_notes'] as num).toInt(),
-  minimumInstantSessions: (json['minumum_instant_sessions'] as num).toInt(),
+  notesPerLevel: (json['notes_per_level'] as num).toInt(),
+  minimumInstantSessions: (json['minimum_instant_sessions'] as num).toInt(),
   maximumInstantSessions: (json['maximum_instant_sessions'] as num).toInt(),
   defaultInstantSessions: (json['default_instant_sessions'] as num).toInt(),
   morningSessionSettings: SessionSettings.fromJson(
@@ -45,9 +47,11 @@ Map<String, dynamic> _$SynestheticPitchSettingsToJson(
   'guess_questions': instance.guessQuestions,
   'session_length_minutes': instance.sessionLengthMinutes,
   'maximum_note_score': instance.maximumNoteScore,
+  'sufficient_note_score': instance.sufficientNoteScore,
   'note_sequence': instance.noteSequence,
   'start_with_notes': instance.startWithNotes,
-  'minumum_instant_sessions': instance.minimumInstantSessions,
+  'notes_per_level': instance.notesPerLevel,
+  'minimum_instant_sessions': instance.minimumInstantSessions,
   'maximum_instant_sessions': instance.maximumInstantSessions,
   'default_instant_sessions': instance.defaultInstantSessions,
   'morning_session_settings': instance.morningSessionSettings.toJson(),

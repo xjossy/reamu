@@ -1,21 +1,27 @@
-import 'dart:developer' as dev;
+import 'package:logger/logger.dart';
 
-/// Simple centralized logging helper.
+/// Simple centralized logging helper using logger package.
 /// Usage: Log.d('message'), Log.i('message'), Log.w('warn'),
 /// Log.e('error message', error: e, stackTrace: st)
 class Log {
-  static const String _defaultTag = 'Reamu';
+  static final _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 2,
+      printEmojis: true,
+      colors: true,
+    ),
+  );
 
   static void d(String message, {String? tag}) {
-    dev.log(message, name: tag ?? _defaultTag, level: 500); // fine level
+    _logger.d('${tag != null ? "[$tag] " : ""}$message');
   }
 
   static void i(String message, {String? tag}) {
-    dev.log(message, name: tag ?? _defaultTag, level: 800); // info
+    _logger.i('${tag != null ? "[$tag] " : ""}$message');
   }
 
   static void w(String message, {String? tag}) {
-    dev.log(message, name: tag ?? _defaultTag, level: 900); // warning
+    _logger.w('${tag != null ? "[$tag] " : ""}$message');
   }
 
   static void e(
@@ -24,10 +30,8 @@ class Log {
     StackTrace? stackTrace,
     String? tag,
   }) {
-    dev.log(
-      message,
-      name: tag ?? _defaultTag,
-      level: 1000, // severe
+    _logger.e(
+      '${tag != null ? "[$tag] " : ""}$message',
       error: error,
       stackTrace: stackTrace,
     );

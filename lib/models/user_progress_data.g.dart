@@ -9,28 +9,36 @@ part of 'user_progress_data.dart';
 UserProgressData _$UserProgressDataFromJson(Map<String, dynamic> json) =>
     UserProgressData(
       synestheticPitch: SynestheticPitchData.fromJson(
-        json['synestetic_pitch'] as Map<String, dynamic>,
+        json['synesthetic_pitch'] as Map<String, dynamic>,
       ),
     );
 
 Map<String, dynamic> _$UserProgressDataToJson(UserProgressData instance) =>
-    <String, dynamic>{'synestetic_pitch': instance.synestheticPitch.toJson()};
+    <String, dynamic>{'synesthetic_pitch': instance.synestheticPitch.toJson()};
 
 SynestheticPitchData _$SynestheticPitchDataFromJson(
   Map<String, dynamic> json,
 ) => SynestheticPitchData(
-  started: json['started'] as bool,
-  openedNotes: (json['opened_notes'] as List<dynamic>)
-      .map((e) => e as String)
+  started: json['started'] as bool? ?? false,
+  openedNotes: (json['opened_notes'] as List<dynamic>?)
+      ?.map((e) => e as String)
       .toList(),
-  learnedNotes: (json['leaned_notes'] as List<dynamic>)
-      .map((e) => e as String)
+  learnedNotes: (json['learned_notes'] as List<dynamic>?)
+      ?.map((e) => e as String)
       .toList(),
-  noteStatistics: (json['note_statistics'] as Map<String, dynamic>).map(
+  noteStatistics: (json['note_statistics'] as Map<String, dynamic>?)?.map(
     (k, e) => MapEntry(k, NoteStatistics.fromJson(e as Map<String, dynamic>)),
   ),
-  level: (json['level'] as num).toInt(),
-  noteScores: Map<String, int>.from(json['note_scores'] as Map),
+  noteScores: (json['note_scores'] as Map<String, dynamic>?)?.map(
+    (k, e) => MapEntry(k, (e as num).toInt()),
+  ),
+  guessStatistics:
+      (json['guess_statistics'] as Map<String, dynamic>?)?.map(
+        (k, e) =>
+            MapEntry(k, GuessStatistics.fromJson(e as Map<String, dynamic>)),
+      ) ??
+      {},
+  level: (json['level'] as num?)?.toInt() ?? 1,
   personalization: json['personalization'] == null
       ? null
       : PersonalizationSettings.fromJson(
@@ -39,6 +47,8 @@ SynestheticPitchData _$SynestheticPitchDataFromJson(
   dayProgress: json['day_progress'] == null
       ? null
       : DayProgress.fromJson(json['day_progress'] as Map<String, dynamic>),
+  levelComplete: json['level_complete'] as bool? ?? false,
+  notesToLearn: (json['notes_to_learn'] as num?)?.toInt() ?? 0,
 );
 
 Map<String, dynamic> _$SynestheticPitchDataToJson(
@@ -46,14 +56,19 @@ Map<String, dynamic> _$SynestheticPitchDataToJson(
 ) => <String, dynamic>{
   'started': instance.started,
   'opened_notes': instance.openedNotes,
-  'leaned_notes': instance.learnedNotes,
+  'learned_notes': instance.learnedNotes,
   'note_statistics': instance.noteStatistics.map(
     (k, e) => MapEntry(k, e.toJson()),
   ),
   'level': instance.level,
   'note_scores': instance.noteScores,
+  'guess_statistics': instance.guessStatistics.map(
+    (k, e) => MapEntry(k, e.toJson()),
+  ),
   'personalization': instance.personalization?.toJson(),
   'day_progress': instance.dayProgress?.toJson(),
+  'level_complete': instance.levelComplete,
+  'notes_to_learn': instance.notesToLearn,
 };
 
 NoteStatistics _$NoteStatisticsFromJson(Map<String, dynamic> json) =>
@@ -65,3 +80,23 @@ NoteStatistics _$NoteStatisticsFromJson(Map<String, dynamic> json) =>
 
 Map<String, dynamic> _$NoteStatisticsToJson(NoteStatistics instance) =>
     <String, dynamic>{'questions': instance.questions};
+
+GuessStatistics _$GuessStatisticsFromJson(Map<String, dynamic> json) =>
+    GuessStatistics(
+      correctGuesses: (json['correct_guesses'] as num?)?.toInt() ?? 0,
+      incorrectGuesses: (json['incorrect_guesses'] as num?)?.toInt() ?? 0,
+      missesTo: (json['misses_to'] as Map<String, dynamic>?)?.map(
+        (k, e) => MapEntry(k, (e as num).toInt()),
+      ),
+      missesFrom: (json['misses_from'] as Map<String, dynamic>?)?.map(
+        (k, e) => MapEntry(k, (e as num).toInt()),
+      ),
+    );
+
+Map<String, dynamic> _$GuessStatisticsToJson(GuessStatistics instance) =>
+    <String, dynamic>{
+      'correct_guesses': instance.correctGuesses,
+      'incorrect_guesses': instance.incorrectGuesses,
+      'misses_to': instance.missesTo,
+      'misses_from': instance.missesFrom,
+    };
